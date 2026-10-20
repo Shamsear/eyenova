@@ -1,0 +1,892 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Brand {
+  id              String   @id @default(uuid())
+  nameEn          String   @unique
+  nameAr          String?
+  logoUrl         String?
+  countryOfOrigin String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+}
+
+model Product {
+  id                  String              @id @default(uuid())
+  sku                 String              @unique
+  barcode             String?
+  titleEn             String
+  titleAr             String?
+  brandName           String?
+  collectionName      String?
+  productType         String?             @default("COLORED_CONTACT_LENSES")
+  basePriceQar        Decimal             @default(0) @db.Decimal(10, 2)
+  salePriceQar        Decimal             @default(0) @db.Decimal(10, 2)
+  stockQuantity       Int                 @default(0)
+  minStockAlert       Int                 @default(3)
+  lensDuration        String?
+  packSize            String?
+  colorNameEn         String?
+  colorHex            String?
+  hasPrescription     Boolean             @default(false)
+  hasPlanoOption      Boolean             @default(true)
+  availablePowers     String[]
+  isActive            Boolean             @default(true)
+  imageUrl            String?
+  power               Decimal?            @db.Decimal(6, 2)
+  cylinder            Decimal?            @db.Decimal(6, 2)
+  axis                Int?
+  manufactureDate     DateTime?           @db.Date
+  expiryDate          DateTime?           @db.Date
+  createdAt           DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  shopifyProductId    BigInt?
+  handle              String?
+  baseCurve           Decimal?            @db.Decimal(3, 1)
+  diameter            Decimal?            @db.Decimal(3, 1)
+  waterContent        String?
+  material            String?
+  replacementSchedule String?
+  descriptionEn       String?
+  descriptionAr       String?
+  tags                String[]
+  options             Json?
+  costPriceQar        Decimal             @default(100.00) @db.Decimal(12, 2)
+  addPower            String?
+  InventoryWriteOff   InventoryWriteOff[]
+  orderItems          OrderItem[]
+  returnItems         OrderReturnItem[]
+  batches             ProductBatch[]
+  PurchaseOrderItem   PurchaseOrderItem[]
+  transferItems       StockTransferItem[]
+  storeStocks         StoreStock[]
+
+  @@index([isActive], map: "idx_Product_isActive")
+  @@index([isActive, titleEn], map: "idx_Product_isActive_title")
+  @@index([productType], map: "idx_Product_productType")
+  @@index([sku], map: "idx_Product_sku")
+  @@index([titleEn], map: "idx_Product_titleEn")
+  @@index([updatedAt], map: "idx_Product_updatedAt")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  imageUrl  String
+  altEn     String?
+  altAr     String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([productId], map: "idx_ProductImage_productId")
+}
+
+model LensOption {
+  id         String      @id @default(uuid())
+  nameEn     String
+  nameAr     String?
+  priceQar   Decimal     @default(0) @db.Decimal(10, 2)
+  isActive   Boolean     @default(true)
+  orderItems OrderItem[]
+}
+
+/// This model contains an index with non-default null sort order and requires additional setup for migrations. Visit https://pris.ly/d/default-index-null-ordering for more info.
+model Order {
+  id                  String        @id @default(uuid())
+  orderNumber         String        @unique
+  userId              String?
+  orderSource         String        @default("POS_DOHA_REGISTER")
+  customerName        String
+  customerPhone       String
+  customerEmail       String?
+  orderStatus         String        @default("CONFIRMED")
+  paymentMethod       String        @default("CASH")
+  paymentStatus       String        @default("PAID")
+  subtotalQar         Decimal       @default(0) @db.Decimal(10, 2)
+  discountQar         Decimal       @default(0) @db.Decimal(10, 2)
+  deliveryFeeQar      Decimal       @default(0) @db.Decimal(10, 2)
+  totalQar            Decimal       @default(0) @db.Decimal(10, 2)
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  paymentReference    String?
+  shippingAddress     Json?
+  notes               String?
+  hasInventoryDeficit Boolean       @default(false)
+  allocatedBatchId    String?
+  unitCostQar         Decimal       @default(0.00) @db.Decimal(12, 2)
+  fulfillmentType     String?       @default("HOME_DELIVERY")
+  trackingNumber      String?
+  deliveryZone        String?
+  salespersonName     String?
+  invoice             Invoice[]
+  user                Customer?     @relation(fields: [userId], references: [id], onUpdate: NoAction)
+  items               OrderItem[]
+  returns             OrderReturn[]
+
+  @@index([createdAt(sort: Desc)], map: "idx_Order_createdAt")
+  @@index([customerPhone], map: "idx_Order_customerPhone")
+  @@index([orderSource], map: "idx_Order_orderSource")
+  @@index([updatedAt(sort: Desc)], map: "idx_Order_updatedAt")
+}
+
+model OrderItem {
+  id                 String      @id @default(uuid())
+  orderId            String
+  productId          String
+  quantity           Int         @default(1)
+  unitPriceQar       Decimal     @default(0) @db.Decimal(10, 2)
+  lensPriceQar       Decimal     @default(0) @db.Decimal(10, 2)
+  totalPriceQar      Decimal     @default(0) @db.Decimal(10, 2)
+  isContactLensOrder Boolean     @default(false)
+  isPlano            Boolean     @default(true)
+  lensOptionId       String?
+  createdAt          DateTime    @default(now()) @db.Timestamptz(6)
+  power              Decimal?    @db.Decimal(4, 2)
+  cylinder           Decimal?    @db.Decimal(4, 2)
+  axis               Int?
+  costPriceQar       Decimal     @default(0.00) @db.Decimal(10, 2)
+  grossProfitQar     Decimal     @default(0.00) @db.Decimal(10, 2)
+  batchId            String?
+  isBackorder        Boolean     @default(false)
+  allocatedBatchId   String?
+  addPower           String?
+  lensOption         LensOption? @relation(fields: [lensOptionId], references: [id], onUpdate: NoAction)
+  order              Order       @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product            Product     @relation(fields: [productId], references: [id], onUpdate: NoAction)
+
+  @@index([orderId], map: "idx_OrderItem_orderId")
+  @@index([productId], map: "idx_OrderItem_productId")
+  @@index([lensOptionId], map: "idx_fk_OrderItem_lensOptionId")
+}
+
+model CompanyProfile {
+  id            Int     @id @default(autoincrement())
+  nameEn        String  @default("EyeNova Optical Trading")
+  nameAr        String? @default("آي نوفا للتجارة البصرية")
+  email         String?
+  phone         String?
+  addressEn     String?
+  addressAr     String?
+  crNumber      String?
+  vatNumber     String?
+  currency      String  @default("QAR")
+  taxRate       Decimal @default(0) @db.Decimal(6, 4)
+  logoUrl       String?
+  invoiceFooter String?
+  website       String? @default("eyenova.qa.com")
+}
+
+model Invoice {
+  id                  String    @id @default(uuid())
+  invoiceNumber       String    @unique
+  orderId             String?
+  customerName        String
+  customerPhone       String
+  status              String    @default("PAID")
+  subtotalQar         Decimal   @default(0) @db.Decimal(10, 2)
+  taxRate             Decimal   @default(0) @db.Decimal(6, 4)
+  taxTotalQar         Decimal   @default(0) @db.Decimal(10, 2)
+  discountQar         Decimal   @default(0) @db.Decimal(10, 2)
+  deliveryFeeQar      Decimal   @default(0) @db.Decimal(10, 2)
+  totalQar            Decimal   @default(0) @db.Decimal(10, 2)
+  refundedAmountQar   Decimal   @default(0.00) @db.Decimal(12, 2)
+  issuedAt            DateTime  @default(now()) @db.Timestamptz(6)
+  paidAt              DateTime? @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  hasInventoryDeficit Boolean   @default(false)
+  trackingNumber      String?
+  salespersonName     String?
+  order               Order?    @relation(fields: [orderId], references: [id], onUpdate: NoAction)
+
+  @@index([createdAt(sort: Desc)], map: "idx_Invoice_createdAt")
+  @@index([orderId], map: "idx_Invoice_orderId")
+  @@index([status], map: "idx_Invoice_status")
+  @@index([updatedAt], map: "idx_Invoice_updatedAt")
+}
+
+model OrderReturn {
+  id           String            @id @default(uuid())
+  returnNum    String            @unique
+  orderId      String
+  storeId      String?
+  reason       String            @default("CUSTOMER_EXCHANGE")
+  customReason String?
+  status       String            @default("PENDING")
+  refundAmount Decimal           @default(0) @db.Decimal(10, 2)
+  creditNoteNo String?           @unique
+  notes        String?
+  processedBy  String?
+  createdAt    DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+  order        Order             @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Store        Store?            @relation(fields: [storeId], references: [id], onUpdate: NoAction)
+  items        OrderReturnItem[]
+
+  @@index([orderId], map: "idx_fk_OrderReturn_orderId")
+  @@index([storeId], map: "idx_fk_OrderReturn_storeId")
+}
+
+model OrderReturnItem {
+  id          String      @id @default(uuid())
+  returnId    String
+  productId   String
+  quantity    Int         @default(1)
+  refundPrice Decimal     @default(0) @db.Decimal(10, 2)
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  orderReturn OrderReturn @relation(fields: [returnId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([productId], map: "idx_fk_OrderReturnItem_productId")
+  @@index([returnId], map: "idx_fk_OrderReturnItem_returnId")
+}
+
+model Promotion {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  title          String
+  discountType   String    @default("PERCENTAGE")
+  discountValue  Decimal   @default(0) @db.Decimal(10, 2)
+  minOrderAmount Decimal?  @db.Decimal(10, 2)
+  maxDiscountQar Decimal?  @db.Decimal(10, 2)
+  usageLimit     Int?
+  usedCount      Int       @default(0)
+  startDate      DateTime? @db.Timestamptz(6)
+  endDate        DateTime? @db.Timestamptz(6)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+}
+
+model NotificationLog {
+  id          String    @id @default(uuid())
+  recipient   String
+  channel     String    @default("WHATSAPP")
+  message     String
+  status      String    @default("PENDING")
+  referenceId String?
+  sentAt      DateTime? @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+}
+
+model WebhookLog {
+  id        String   @id @default(uuid())
+  provider  String   @default("TALABAT")
+  payload   Json?
+  status    String   @default("PROCESSED")
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AuthOtp {
+  id        String   @id @default(uuid())
+  phone     String
+  otpCode   String
+  isUsed    Boolean  @default(false)
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model StockAdjustment {
+  id         String   @id @default(uuid())
+  productId  String
+  storeId    String   @default("STORE-MAIN")
+  batchId    String?
+  systemQty  Int      @default(0)
+  countedQty Int      @default(0)
+  deltaQty   Int
+  reason     String
+  note       String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([createdAt], map: "idx_StockAdjustment_createdAt")
+  @@index([productId], map: "idx_StockAdjustment_productId")
+  @@index([reason], map: "idx_StockAdjustment_reason")
+}
+
+model Store {
+  id            String          @id @default(uuid())
+  name          String
+  code          String          @unique
+  address       String?
+  phone         String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now()) @db.Timestamptz(6)
+  OrderReturn   OrderReturn[]
+  batches       ProductBatch[]
+  transfersFrom StockTransfer[] @relation("TransfersFrom")
+  transfersTo   StockTransfer[] @relation("TransfersTo")
+  stocks        StoreStock[]
+  users         UserAccount[]
+}
+
+model UserAccount {
+  id                String              @id @default(uuid())
+  username          String              @unique
+  fullName          String
+  pinCode           String              @default("0000")
+  role              String              @default("STAFF")
+  storeId           String?
+  isActive          Boolean             @default(true)
+  failedAttempts    Int                 @default(0)
+  lockedUntil       DateTime?           @db.Timestamptz(6)
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  StaffAdvance      StaffAdvance[]
+  StaffSalaryRecord StaffSalaryRecord[]
+  store             Store?              @relation(fields: [storeId], references: [id], onUpdate: NoAction)
+
+  @@index([storeId], map: "idx_fk_UserAccount_storeId")
+}
+
+/// This model contains an index with non-default null sort order and requires additional setup for migrations. Visit https://pris.ly/d/default-index-null-ordering for more info.
+model StoreStock {
+  storeId       String
+  productId     String
+  stockQuantity Int      @default(0)
+  minStockAlert Int      @default(3)
+  updatedAt     DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([storeId, productId])
+  @@index([productId], map: "idx_StoreStock_productId")
+  @@index([updatedAt(sort: Desc)], map: "idx_StoreStock_updatedAt")
+}
+
+/// This model contains an index with non-default null sort order and requires additional setup for migrations. Visit https://pris.ly/d/default-index-null-ordering for more info.
+model ProductBatch {
+  id                     String    @id @default(uuid())
+  productId              String
+  storeId                String
+  batchNumber            String
+  manufactureDate        DateTime? @db.Date
+  expiryDate             DateTime? @db.Date
+  quantity               Int       @default(0)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(6)
+  power                  String?
+  cylinder               String?
+  axis                   Int?
+  status                 String    @default("ACTIVE")
+  shopifyVariantId       BigInt?
+  shopifyInventoryItemId BigInt?
+  costPriceQar           Decimal   @default(0.00) @db.Decimal(10, 2)
+  addPower               String?
+  updatedAt              DateTime? @default(now())
+  product                Product   @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  store                  Store     @relation(fields: [storeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([createdAt], map: "idx_ProductBatch_createdAt")
+  @@index([expiryDate], map: "idx_ProductBatch_expiry")
+  @@index([productId], map: "idx_ProductBatch_productId")
+  @@index([productId, expiryDate], map: "idx_ProductBatch_productId_expiry")
+  @@index([productId, power], map: "idx_ProductBatch_productId_power")
+  @@index([status], map: "idx_ProductBatch_status")
+  @@index([updatedAt(sort: Desc)], map: "idx_ProductBatch_updatedAt")
+  @@index([storeId], map: "idx_fk_ProductBatch_storeId")
+}
+
+model StockTransfer {
+  id          String              @id @default(uuid())
+  transferNum String              @unique
+  fromStoreId String
+  toStoreId   String
+  requestedBy String?
+  approvedBy  String?
+  status      String              @default("REQUESTED")
+  notes       String?
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+  fromStore   Store               @relation("TransfersFrom", fields: [fromStoreId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  toStore     Store               @relation("TransfersTo", fields: [toStoreId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  items       StockTransferItem[]
+
+  @@index([fromStoreId], map: "idx_fk_StockTransfer_fromStoreId")
+  @@index([toStoreId], map: "idx_fk_StockTransfer_toStoreId")
+}
+
+model StockTransferItem {
+  id         String        @id @default(uuid())
+  transferId String
+  productId  String
+  quantity   Int           @default(1)
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([productId], map: "idx_fk_StockTransferItem_productId")
+  @@index([transferId], map: "idx_fk_StockTransferItem_transferId")
+}
+
+model Customer {
+  id              String       @id @default(uuid())
+  phone           String       @unique
+  fullName        String?
+  email           String?
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @db.Timestamptz(6)
+  storeCreditQar  Decimal      @default(0.00) @db.Decimal(12, 2)
+  tag             String       @default("REGULAR")
+  codRefusalCount Int          @default(0)
+  isCodBlocked    Boolean      @default(false)
+  blockReason     String?
+  CustomerRx      CustomerRx[]
+  orders          Order[]
+}
+
+model Expense {
+  id            String               @id @default(uuid())
+  expenseNumber String               @unique
+  storeId       String?
+  category      ExpenseCategory
+  title         String
+  amountQar     Decimal              @db.Decimal(10, 2)
+  paymentSource ExpensePaymentSource @default(COMPANY_TREASURY)
+  shiftId       String?
+  receiptNumber String?
+  paidTo        String?
+  recordedBy    String
+  expenseDate   DateTime             @default(now()) @db.Timestamptz(6)
+  notes         String?
+  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
+
+  @@index([category])
+  @@index([expenseDate])
+  @@index([storeId])
+}
+
+model CashRegisterShift {
+  id              String    @id @default(uuid())
+  storeId         String?
+  cashierName     String
+  openedAt        DateTime  @default(now()) @db.Timestamptz(6)
+  closedAt        DateTime? @db.Timestamptz(6)
+  openingFloat    Decimal   @default(0.00) @db.Decimal(12, 2)
+  cashSales       Decimal   @default(0.00) @db.Decimal(12, 2)
+  cardSales       Decimal   @default(0.00) @db.Decimal(12, 2)
+  splitCashSales  Decimal   @default(0.00) @db.Decimal(12, 2)
+  otherSales      Decimal   @default(0.00) @db.Decimal(12, 2)
+  pettyCashOut    Decimal   @default(0.00) @db.Decimal(12, 2)
+  pettyCashReason String?
+  countedCash     Decimal?  @db.Decimal(12, 2)
+  variance        Decimal?  @db.Decimal(12, 2)
+  status          String    @default("OPEN")
+  notes           String?
+  cashIn          Decimal   @default(0.00) @db.Decimal(12, 2)
+  cashInReason    String?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model AuditLog {
+  id          String   @id
+  timestamp   DateTime @default(now()) @db.Timestamptz(6)
+  userId      String?
+  cashierName String?
+  storeId     String?
+  action      String
+  entityType  String?
+  entityId    String?
+  details     String?
+
+  @@index([action], map: "idx_audit_action")
+  @@index([timestamp(sort: Desc)], map: "idx_audit_timestamp")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CompanyTreasury {
+  id             String   @id @default("COMPANY_MAIN")
+  balanceQar     Decimal  @default(0.00) @db.Decimal(14, 2)
+  lastUpdated    DateTime @default(now()) @db.Timestamptz(6)
+  cashBalanceQar Decimal  @default(500.00) @db.Decimal(14, 2)
+  bankBalanceQar Decimal  @default(500.00) @db.Decimal(14, 2)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model CustomerRx {
+  id         String   @id
+  customerId String
+  odSphere   Decimal? @db.Decimal(6, 2)
+  odCyl      Decimal? @db.Decimal(6, 2)
+  odAxis     Int?
+  odAdd      Decimal? @db.Decimal(6, 2)
+  osSphere   Decimal? @db.Decimal(6, 2)
+  osCyl      Decimal? @db.Decimal(6, 2)
+  osAxis     Int?
+  osAdd      Decimal? @db.Decimal(6, 2)
+  pd         Decimal? @db.Decimal(6, 2)
+  notes      String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  Customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([customerId], map: "idx_CustomerRx_customerId")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model FinancialAuditLedger {
+  id                  String          @id
+  timestamp           DateTime        @default(now()) @db.Timestamptz(6)
+  txType              FinancialTxType
+  amountQar           Decimal         @db.Decimal(12, 2)
+  balanceBeforeQar    Decimal         @db.Decimal(14, 2)
+  balanceAfterQar     Decimal         @db.Decimal(14, 2)
+  profitImpactQar     Decimal         @default(0.00) @db.Decimal(12, 2)
+  referenceType       String?
+  referenceId         String?
+  operatorName        String
+  notes               String?
+  receiptUrl          String?
+  paymentChannel      String          @default("BANK")
+  cashAmountQar       Decimal         @default(0.00) @db.Decimal(12, 2)
+  bankAmountQar       Decimal         @default(0.00) @db.Decimal(12, 2)
+  cashBalanceAfterQar Decimal         @default(500.00) @db.Decimal(14, 2)
+  bankBalanceAfterQar Decimal         @default(500.00) @db.Decimal(14, 2)
+
+  @@index([referenceId])
+  @@index([timestamp])
+  @@index([txType])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model InventoryWriteOff {
+  id           String         @id
+  productId    String
+  batchId      String?
+  power        String?
+  cylinder     String?
+  axis         Int?
+  quantity     Int            @default(1)
+  unitCostQar  Decimal        @default(0.00) @db.Decimal(10, 2)
+  totalLossQar Decimal        @default(0.00) @db.Decimal(12, 2)
+  reason       WriteoffReason @default(EXPIRED)
+  writtenOffBy String
+  date         DateTime       @default(now()) @db.Timestamptz(6)
+  notes        String?
+  createdAt    DateTime       @default(now()) @db.Timestamptz(6)
+  Product      Product        @relation(fields: [productId], references: [id], onUpdate: NoAction)
+
+  @@index([date])
+  @@index([productId])
+  @@index([reason])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrder {
+  id                    String              @id
+  poNumber              String              @unique
+  supplierId            String
+  supplierInvoiceNumber String?
+  storeId               String?
+  receivingStatus       PoReceivingStatus   @default(DRAFT)
+  paymentStatus         PoPaymentStatus     @default(UNPAID)
+  currency              String              @default("QAR")
+  exchangeRate          Decimal             @default(1.0000) @db.Decimal(8, 4)
+  subtotalQar           Decimal             @default(0.00) @db.Decimal(12, 2)
+  taxQar                Decimal             @default(0.00) @db.Decimal(12, 2)
+  totalAmountQar        Decimal             @default(0.00) @db.Decimal(12, 2)
+  paidAmountQar         Decimal             @default(0.00) @db.Decimal(12, 2)
+  orderDate             DateTime            @default(now()) @db.Timestamptz(6)
+  expectedDeliveryDate  DateTime?           @db.Timestamptz(6)
+  receivedDate          DateTime?           @db.Timestamptz(6)
+  paymentDueDate        DateTime?           @db.Timestamptz(6)
+  notes                 String?
+  createdByName         String              @default("Admin")
+  createdAt             DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @db.Timestamptz(6)
+  paymentChannel        String?             @default("BANK")
+  cashPaidQar           Decimal?            @default(0.00) @db.Decimal(12, 2)
+  bankPaidQar           Decimal?            @default(0.00) @db.Decimal(12, 2)
+  deliveredByName       String?
+  supplierRepContact    String?
+  creditPaidQar         Decimal             @default(0.00) @db.Decimal(12, 2)
+  Supplier              Supplier            @relation(fields: [supplierId], references: [id], onUpdate: NoAction)
+  PurchaseOrderItem     PurchaseOrderItem[]
+
+  @@index([paymentStatus])
+  @@index([poNumber])
+  @@index([receivingStatus])
+  @@index([supplierId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model PurchaseOrderItem {
+  id               String        @id
+  purchaseOrderId  String
+  productId        String
+  power            String?
+  cylinder         String?
+  axis             Int?
+  isFoc            Boolean       @default(false)
+  orderedQuantity  Int           @default(1)
+  receivedQuantity Int           @default(0)
+  unitCostOriginal Decimal       @default(0.00) @db.Decimal(12, 2)
+  unitCostQar      Decimal       @default(0.00) @db.Decimal(12, 2)
+  totalCostQar     Decimal       @default(0.00) @db.Decimal(12, 2)
+  batchNumber      String?
+  manufactureDate  DateTime?     @db.Date
+  expiryDate       DateTime?     @db.Date
+  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
+  Product          Product       @relation(fields: [productId], references: [id], onUpdate: NoAction)
+  PurchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([productId])
+  @@index([purchaseOrderId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model StaffAdvance {
+  id                  String        @id
+  userId              String
+  amountQar           Decimal       @db.Decimal(10, 2)
+  status              AdvanceStatus @default(PENDING)
+  requestDate         DateTime      @default(now()) @db.Timestamptz(6)
+  disbursedDate       DateTime?     @db.Timestamptz(6)
+  deductedPeriodMonth Int?
+  deductedPeriodYear  Int?
+  disbursedBy         String?
+  notes               String?
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  UserAccount         UserAccount   @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@index([status])
+  @@index([userId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model StaffSalaryRecord {
+  id                   String               @id
+  userId               String
+  periodMonth          Int
+  periodYear           Int
+  baseSalaryQar        Decimal              @db.Decimal(10, 2)
+  allowancesQar        Decimal              @default(0.00) @db.Decimal(10, 2)
+  commissionQar        Decimal              @default(0.00) @db.Decimal(10, 2)
+  advancesDeductedQar  Decimal              @default(0.00) @db.Decimal(10, 2)
+  penaltiesDeductedQar Decimal              @default(0.00) @db.Decimal(10, 2)
+  netPayableQar        Decimal              @db.Decimal(10, 2)
+  status               PayrollStatus        @default(PENDING)
+  paymentMethod        SalaryPaymentMethod?
+  bankName             String?
+  iban                 String?
+  transactionRef       String?
+  wpsBatchRef          String?
+  slipAttachmentUrl    String?
+  paidAt               DateTime?            @db.Timestamptz(6)
+  notes                String?
+  createdAt            DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime             @default(now()) @db.Timestamptz(6)
+  paymentChannel       String?              @default("BANK")
+  cashPaidQar          Decimal?             @default(0.00) @db.Decimal(12, 2)
+  bankPaidQar          Decimal?             @default(0.00) @db.Decimal(12, 2)
+  UserAccount          UserAccount          @relation(fields: [userId], references: [id], onUpdate: NoAction)
+
+  @@unique([userId, periodMonth, periodYear])
+  @@index([periodYear, periodMonth], map: "StaffSalaryRecord_period_idx")
+  @@index([userId])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model StoreSetting {
+  key       String    @id
+  value     String
+  updatedAt DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Supplier {
+  id                      String          @id
+  name                    String          @unique
+  contactPerson           String?
+  phone                   String?
+  email                   String?
+  currency                String          @default("QAR")
+  creditTerms             CreditTerm      @default(COD)
+  advanceCreditBalanceQar Decimal         @default(0.00) @db.Decimal(12, 2)
+  notes                   String?
+  createdAt               DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime        @default(now()) @db.Timestamptz(6)
+  isMultiBrand            Boolean         @default(false)
+  PurchaseOrder           PurchaseOrder[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplierPayment {
+  id              String   @id
+  poId            String
+  poNumber        String
+  supplierName    String
+  amountQar       Decimal  @default(0.00) @db.Decimal(12, 2)
+  paymentChannel  String   @default("BANK")
+  referenceNumber String?
+  notes           String?
+  operatorName    String   @default("Admin")
+  paidAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([poId], map: "idx_supplierpayment_poid")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplierPurchase {
+  id                   String                 @id
+  supplierName         String
+  invoiceNumber        String?
+  receivedAt           DateTime               @default(now()) @db.Timestamptz(6)
+  operatorName         String
+  totalCostQar         Decimal                @default(0.00) @db.Decimal(12, 2)
+  itemsCount           Int                    @default(0)
+  notes                String?
+  deliveredByName      String?
+  supplierRepContact   String?
+  SupplierPurchaseItem SupplierPurchaseItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplierPurchaseItem {
+  id               String           @id
+  purchaseId       String
+  productId        String
+  productTitle     String
+  sku              String?
+  quantity         Int              @default(1)
+  unitCostQar      Decimal          @default(0.00) @db.Decimal(12, 2)
+  batchNumber      String?
+  manufactureDate  DateTime?        @db.Timestamptz(6)
+  expiryDate       DateTime?        @db.Timestamptz(6)
+  power            String?
+  cylinder         String?
+  axis             Int?
+  addPower         String?
+  SupplierPurchase SupplierPurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([purchaseId], map: "idx_fk_SupplierPurchaseItem_purchaseId")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplierReturn {
+  id                 String               @id
+  returnNumber       String               @unique
+  supplierId         String
+  supplierName       String
+  poNumber           String?
+  returnDate         DateTime             @default(now()) @db.Timestamptz(6)
+  totalAmountQar     Decimal              @default(0.00) @db.Decimal(12, 2)
+  reason             String               @default("DAMAGED_OR_DEFECTIVE")
+  refundDestination  String               @default("SUPPLIER_CREDIT")
+  operatorName       String
+  notes              String?
+  createdAt          DateTime             @default(now()) @db.Timestamptz(6)
+  SupplierReturnItem SupplierReturnItem[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplierReturnItem {
+  id             String         @id
+  returnId       String
+  productId      String
+  productTitle   String
+  sku            String?
+  quantity       Int            @default(1)
+  unitCostQar    Decimal        @default(0.00) @db.Decimal(12, 2)
+  reason         String?
+  SupplierReturn SupplierReturn @relation(fields: [returnId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([returnId], map: "idx_fk_SupplierReturnItem_returnId")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model SupplyContact {
+  id                String   @id
+  name              String
+  phone             String?
+  role              String   @default("SUPPLY_PERSON")
+  companyOrSupplier String?
+  notes             String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([name], map: "idx_supplycontact_name")
+}
+
+enum AdvanceStatus {
+  PENDING
+  DISBURSED
+  REPAID_PAYROLL
+}
+
+enum CreditTerm {
+  COD
+  NET_15
+  NET_30
+  NET_60
+}
+
+enum ExpenseCategory {
+  RENT
+  UTILITIES_KAHRAMAA
+  PANTRY_TEA
+  PACKAGING_BAGS
+  LOGISTICS_DELIVERY
+  CLEANING_MAINTENANCE
+  MARKETING_ADS
+  POS_ROLLS
+  MISCELLANEOUS
+}
+
+enum ExpensePaymentSource {
+  CASH_DRAWER
+  COMPANY_TREASURY
+  CORPORATE_CARD
+}
+
+enum FinancialTxType {
+  CAPITAL_TOPUP
+  PO_PAYMENT
+  SUPPLIER_ADVANCE
+  STORE_EXPENSE
+  SALARY_PAYOUT
+  SALARY_ADVANCE
+  SALE_REVENUE
+  SHOPIFY_SALE
+  AGGREGATOR_COMMISSION
+  INVENTORY_WRITEOFF
+  RTV_CREDIT
+  REFUND
+  MANUAL_ADJUSTMENT
+  BANK_CASH_TRANSFER
+  PAYMENT_METHOD_CHANGE
+}
+
+enum PayrollStatus {
+  PENDING
+  APPROVED
+  PAID
+}
+
+enum PoPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+}
+
+enum PoReceivingStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  CANCELLED
+}
+
+enum SalaryPaymentMethod {
+  ONLINE_BANK_TRANSFER
+  CASH
+  CHEQUE
+}
+
+enum WriteoffReason {
+  EXPIRED
+  DAMAGED_LEAKAGE
+  DEFECTIVE_BATCH
+}

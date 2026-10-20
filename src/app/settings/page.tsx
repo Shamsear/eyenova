@@ -78,7 +78,7 @@ export default function SettingsPage() {
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-3 sm:gap-4 overflow-y-auto bg-stone-100/60">
         {/* Sticky Action Header (Always visible without scrolling) */}
-        <div className="bg-white border border-stone-200 rounded-lg px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
+        <div className="bg-white border border-stone-200 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0 min-w-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="font-mono text-xs font-semibold text-stone-900 uppercase tracking-wider truncate">
               Store Configuration
@@ -91,12 +91,12 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center flex-wrap gap-2 shrink-0 justify-start sm:justify-end min-w-0">
             <button
               type="button"
               onClick={loadSettings}
               disabled={loading || saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               <RotateCcw size={12} className={loading ? 'animate-spin' : ''} />
               <span>Reset</span>
@@ -106,7 +106,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => handleSave()}
               disabled={saving}
-              className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+              className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
               <span>Save Changes</span>

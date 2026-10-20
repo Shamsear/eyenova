@@ -1072,9 +1072,9 @@ export default function PurchasesPage() {
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-3 sm:gap-4 overflow-hidden bg-stone-100/60">
         {/* Top Action Header with Tab Selection and Primary Action CTAs */}
-        <div className="bg-white border border-stone-200 rounded-lg p-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-          {/* Single-line Tab Switcher */}
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scrollbar-none w-full sm:w-auto">
+        <div className="bg-white border border-stone-200 rounded-lg p-2.5 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-2.5 shrink-0 min-w-0">
+          {/* Single-line Tab Switcher (Scrollable horizontally without clipping) */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 min-w-0 max-w-full">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -1090,14 +1090,14 @@ export default function PurchasesPage() {
             ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+          {/* Action Buttons (Flex-wrap and gracefully stack when space is tight) */}
+          <div className="flex items-center flex-wrap gap-2 w-full xl:w-auto justify-start sm:justify-end shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-stone-100 min-w-0">
             <button
               onClick={() => {
                 setFormError('');
                 setIsDirectInboundOpen(true);
               }}
-              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Truck size={13} />
               <span>Direct Inbound</span>
@@ -1108,7 +1108,7 @@ export default function PurchasesPage() {
                 setFormError('');
                 setIsReceivePoOpen(true);
               }}
-              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <PackageCheck size={13} />
               <span>Receive PO</span>
@@ -1119,7 +1119,7 @@ export default function PurchasesPage() {
                 setFormError('');
                 setIsCreatePoOpen(true);
               }}
-              className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+              className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
             >
               <Plus size={13} />
               <span>New Purchase Order</span>

@@ -47,18 +47,18 @@ export function PageHeader({
   return (
     <div className="bg-white border-b border-stone-200 px-3 py-2.5 space-y-2 select-none shrink-0">
       {/* Top Bar: Title + Actions */}
-      <div className="flex items-center justify-between gap-3 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
-          <h2 className="text-sm font-medium text-stone-900 truncate whitespace-nowrap">{title}</h2>
+          <h2 className="text-sm font-medium text-stone-900 truncate">{title}</h2>
           {subtitle && (
-            <span className="text-[11px] text-stone-400 font-mono hidden sm:inline truncate whitespace-nowrap">
+            <span className="text-[11px] text-stone-400 font-mono hidden sm:inline truncate">
               {subtitle}
             </span>
           )}
         </div>
 
-        {/* Action Buttons (Strictly Single-Line) */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Action Buttons */}
+        <div className="flex items-center flex-wrap gap-1.5 justify-start sm:justify-end shrink-0 min-w-0">
           {secondaryAction && (
             <button
               type="button"

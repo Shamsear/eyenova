@@ -273,24 +273,24 @@ export default function OnlineStockPage() {
       subtitle="Configure contact lens powers, cylinders and axes for online storefront"
     >
       <div className="flex-1 min-h-0 flex flex-col p-2.5 sm:p-4 gap-2.5 sm:gap-3 overflow-hidden bg-stone-100/60">
-        {/* Top Control Bar - strictly 1 line */}
-        <div className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3 shrink-0">
+        {/* Top Control Bar */}
+        <div className="bg-white border border-stone-200 rounded-lg px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 min-w-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-stone-900 truncate">
               Storefront Availability
             </span>
             {statusMessage && (
-              <span className="text-[11px] font-mono text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded truncate max-w-[240px] sm:max-w-none">
+              <span className="text-[11px] font-mono text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded truncate max-w-[200px] sm:max-w-none">
                 {statusMessage}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center flex-wrap gap-2 shrink-0 justify-start sm:justify-end min-w-0">
             <button
               onClick={loadProducts}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               <RotateCcw size={12} className={isLoading ? 'animate-spin' : ''} />
               <span className="truncate">Refresh</span>
@@ -299,7 +299,7 @@ export default function OnlineStockPage() {
             <button
               onClick={handleSaveAndSync}
               disabled={isSaving || !selectedProduct}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-50 bg-stone-900 hover:bg-stone-800 rounded transition disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-50 bg-stone-900 hover:bg-stone-800 rounded transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
             >
               <Save size={12} />
               <span className="truncate">{isSaving ? 'Syncing...' : 'Save & Sync'}</span>

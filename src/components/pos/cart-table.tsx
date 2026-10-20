@@ -31,6 +31,8 @@ import {
   PhoneCall,
   Globe,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 
 export function CartTable() {
   const {
@@ -653,94 +655,104 @@ export function CartTable() {
             <span className="text-[11px] text-stone-400 font-mono mt-0.5">Scan barcode or tap products to begin</span>
           </div>
         ) : (
-          lines.map((line) => {
-            const isSelected = line.lineId === selectedLineId;
-            const lineTotal = line.unitPrice * line.quantity;
-            const isOpticalItem = isOpticalProduct(line);
-            const opticalSummary = line.lensSummary || (isOpticalItem ? formatOpticalSpecs(line) : '');
+          <AnimatePresence initial={false}>
+            {lines.map((line) => {
+              const isSelected = line.lineId === selectedLineId;
+              const lineTotal = line.unitPrice * line.quantity;
+              const isOpticalItem = isOpticalProduct(line);
+              const opticalSummary = line.lensSummary || (isOpticalItem ? formatOpticalSpecs(line) : '');
 
-            return (
-              <div
-                key={line.lineId}
-                onClick={() => setSelectedLineId(line.lineId)}
-                className={`p-2 flex items-center justify-between gap-2 transition cursor-pointer min-w-0 ${
-                  isSelected ? 'bg-stone-100/90 border-l-2 border-stone-900 ring-1 ring-inset ring-stone-200' : 'hover:bg-stone-50/60'
-                }`}
-              >
-                {/* Title & Metadata (Strictly Single-Line) */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium text-xs text-stone-900 truncate block">
-                      {line.titleEn}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                    {opticalSummary ? (
-                      <span className="text-[9px] font-mono px-1 py-0.2 bg-stone-200 text-stone-800 rounded shrink-0 truncate max-w-[120px]">
-                        {opticalSummary}
+              return (
+                <motion.div
+                  key={line.lineId}
+                  layout
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -16, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => setSelectedLineId(line.lineId)}
+                  className={`p-2 flex items-center justify-between gap-2 transition cursor-pointer min-w-0 ${
+                    isSelected ? 'bg-stone-100/90 border-l-2 border-stone-900 ring-1 ring-inset ring-stone-200' : 'hover:bg-stone-50/60'
+                  }`}
+                >
+                  {/* Title & Metadata (Strictly Single-Line) */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-medium text-xs text-stone-900 truncate block">
+                        {line.titleEn}
                       </span>
-                    ) : null}
-                    <span className="text-[10px] text-stone-400 font-mono truncate">
-                      {line.brandName || 'Optical'} · {formatQar(line.unitPrice)}
-                    </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                      {opticalSummary ? (
+                        <span className="text-[9px] font-mono px-1 py-0.2 bg-stone-200 text-stone-800 rounded shrink-0 truncate max-w-[120px]">
+                          {opticalSummary}
+                        </span>
+                      ) : null}
+                      <span className="text-[10px] text-stone-400 font-mono truncate flex items-center gap-1">
+                        <span>{line.brandName || 'Optical'} ·</span>
+                        <AnimatedQar value={line.unitPrice} className="text-stone-400" />
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Stepper + Total (Single-Line) */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center border border-stone-200 rounded bg-white">
+                  {/* Stepper + Total (Single-Line) */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center border border-stone-200 rounded bg-white">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          incrementLineQuantity(line.lineId, -1);
+                        }}
+                        className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition cursor-pointer"
+                      >
+                        <Minus size={10} />
+                      </button>
+                      <AnimatedCount
+                        value={line.quantity}
+                        className="w-6 justify-center font-mono text-xs font-medium text-stone-900 tabular-nums"
+                      />
+                      {(() => {
+                        const totalStock = getAvailableStockForLine(line);
+                        const usedByOthers = getOtherLinesStockUsage(line, lines);
+                        const maxAllowed = Math.max(0, totalStock - usedByOthers);
+                        const isMaxReached = line.quantity >= maxAllowed;
+
+                        return (
+                          <button
+                            disabled={isMaxReached}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              incrementLineQuantity(line.lineId, 1);
+                            }}
+                            title={isMaxReached ? `Max stock reached (${maxAllowed} pcs)` : 'Add 1 piece'}
+                            className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                          >
+                            <Plus size={10} />
+                          </button>
+                        );
+                      })()}
+                    </div>
+
+                    <AnimatedQar
+                      value={lineTotal}
+                      className="font-mono font-medium text-xs text-stone-900 tabular-nums min-w-[55px] justify-end text-right"
+                    />
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        incrementLineQuantity(line.lineId, -1);
+                        removeLine(line.lineId);
                       }}
-                      className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition cursor-pointer"
+                      title="Remove item"
+                      className="p-1 text-stone-400 hover:text-stone-700 rounded cursor-pointer"
                     >
-                      <Minus size={10} />
+                      <Trash2 size={12} />
                     </button>
-                    <span className="w-6 text-center font-mono text-xs font-medium text-stone-900 tabular-nums">
-                      {line.quantity}
-                    </span>
-                    {(() => {
-                      const totalStock = getAvailableStockForLine(line);
-                      const usedByOthers = getOtherLinesStockUsage(line, lines);
-                      const maxAllowed = Math.max(0, totalStock - usedByOthers);
-                      const isMaxReached = line.quantity >= maxAllowed;
-
-                      return (
-                        <button
-                          disabled={isMaxReached}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            incrementLineQuantity(line.lineId, 1);
-                          }}
-                          title={isMaxReached ? `Max stock reached (${maxAllowed} pcs)` : 'Add 1 piece'}
-                          className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                        >
-                          <Plus size={10} />
-                        </button>
-                      );
-                    })()}
                   </div>
-
-                  <span className="font-mono font-medium text-xs text-stone-900 tabular-nums min-w-[55px] text-right">
-                    {formatQar(lineTotal)}
-                  </span>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeLine(line.lineId);
-                    }}
-                    title="Remove item"
-                    className="p-1 text-stone-400 hover:text-stone-700 rounded cursor-pointer"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         )}
       </div>
 
@@ -750,7 +762,7 @@ export function CartTable() {
         <div className="space-y-0.5 text-xs">
           <div className="flex justify-between items-center text-stone-600 text-[11px]">
             <span className="font-mono text-stone-500">Subtotal</span>
-            <span className="font-mono text-stone-900 tabular-nums">{formatQar(subtotal)}</span>
+            <AnimatedQar value={subtotal} className="font-mono text-stone-900 tabular-nums" />
           </div>
 
           <div className="flex justify-between items-center text-stone-600 text-[11px]">
@@ -807,10 +819,10 @@ export function CartTable() {
 
             <div className="flex items-center gap-2 font-mono text-[11px] tabular-nums">
               {discountTotal > 0 && (
-                <span className="text-emerald-700">-{formatQar(discountTotal)}</span>
+                <AnimatedQar value={discountTotal} prefix="-" className="text-emerald-700" />
               )}
               {deliveryFee > 0 && (
-                <span className="text-stone-700">+{formatQar(deliveryFee)}</span>
+                <AnimatedQar value={deliveryFee} prefix="+" className="text-stone-700" />
               )}
             </div>
           </div>
@@ -819,7 +831,7 @@ export function CartTable() {
         {/* Total Due Banner */}
         <div className="pt-1 border-t border-stone-200 flex items-baseline justify-between">
           <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500">Total Due</span>
-          <span className="text-base font-semibold text-stone-900 font-mono tabular-nums">{formatQar(grandTotal)}</span>
+          <AnimatedQar value={grandTotal} className="text-base font-semibold text-stone-900 font-mono tabular-nums" />
         </div>
 
         {/* Unified 5-Action Tender Strip: Hold, Recall, Cash, Card, Split */}
@@ -834,10 +846,15 @@ export function CartTable() {
           </button>
           <button
             onClick={() => setHeldSalesModalOpen(true)}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 transition cursor-pointer min-h-[28px] truncate px-0.5"
+            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 transition cursor-pointer min-h-[28px] truncate px-0.5 gap-0.5"
             title="Recall parked cart (F4)"
           >
-            Recall {heldSales.length > 0 ? `(${heldSales.length})` : '(F4)'}
+            <span>Recall</span>
+            {heldSales.length > 0 ? (
+              <AnimatedCount value={heldSales.length} prefix="(" suffix=")" />
+            ) : (
+              <span>(F4)</span>
+            )}
           </button>
           <button
             onClick={() => setPaymentModalOpen(true)}

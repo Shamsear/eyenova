@@ -19,6 +19,8 @@ import {
   Loader2,
   AlertTriangle,
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 
 interface InvoiceRow {
   id: string;
@@ -233,9 +235,10 @@ export default function InvoicesPage() {
       header: 'Total',
       align: 'right',
       render: (row) => (
-        <span className="font-mono font-medium text-stone-900 tabular-nums truncate block">
-          {formatQar(row.totalQar)}
-        </span>
+        <AnimatedQar
+          value={row.totalQar}
+          className="font-mono font-medium text-stone-900 tabular-nums truncate block justify-end"
+        />
       ),
     },
     {
@@ -341,9 +344,10 @@ export default function InvoicesPage() {
 
               {/* Tier 3: Total and Quick Actions (Strictly Single-Line) */}
               <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100">
-                <span className="font-mono font-medium text-xs text-stone-900 tabular-nums">
-                  {formatQar(inv.totalQar)}
-                </span>
+                <AnimatedQar
+                  value={inv.totalQar}
+                  className="font-mono font-medium text-xs text-stone-900 tabular-nums"
+                />
                 <div className="flex items-center gap-1.5 shrink-0 text-xs">
                   <button
                     type="button"
@@ -374,8 +378,13 @@ export default function InvoicesPage() {
 
       {/* Invoice Details Modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] shadow-xl">
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+          >
             <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className="font-medium text-xs text-stone-900 truncate">
@@ -422,9 +431,15 @@ export default function InvoicesPage() {
                     {(selectedInvoice.items || []).map((it) => (
                       <tr key={it.id} className="h-8">
                         <td className="p-2 truncate max-w-[160px] font-medium text-stone-800">{it.name}</td>
-                        <td className="p-2 text-center font-mono tabular-nums">{it.quantity}</td>
-                        <td className="p-2 text-right font-mono tabular-nums">{formatQar(it.unitPrice)}</td>
-                        <td className="p-2 text-right font-mono font-medium text-stone-900 tabular-nums">{formatQar(it.total)}</td>
+                        <td className="p-2 text-center font-mono tabular-nums">
+                          <AnimatedCount value={it.quantity} />
+                        </td>
+                        <td className="p-2 text-right font-mono tabular-nums">
+                          <AnimatedQar value={it.unitPrice} />
+                        </td>
+                        <td className="p-2 text-right font-mono font-medium text-stone-900 tabular-nums">
+                          <AnimatedQar value={it.total} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -435,23 +450,23 @@ export default function InvoicesPage() {
               <div className="p-2.5 bg-stone-50 rounded-lg border border-stone-200 space-y-1 text-[11px]">
                 <div className="flex justify-between text-stone-600">
                   <span>Subtotal:</span>
-                  <span className="font-mono tabular-nums">{formatQar(selectedInvoice.subtotalQar)}</span>
+                  <AnimatedQar value={selectedInvoice.subtotalQar} className="font-mono tabular-nums" />
                 </div>
                 {selectedInvoice.discountQar > 0 && (
                   <div className="flex justify-between text-emerald-700">
                     <span>Discount:</span>
-                    <span className="font-mono tabular-nums">-{formatQar(selectedInvoice.discountQar)}</span>
+                    <AnimatedQar value={selectedInvoice.discountQar} prefix="-" className="font-mono tabular-nums" />
                   </div>
                 )}
                 {selectedInvoice.deliveryFeeQar > 0 && (
                   <div className="flex justify-between text-stone-600">
                     <span>Delivery:</span>
-                    <span className="font-mono tabular-nums">+{formatQar(selectedInvoice.deliveryFeeQar)}</span>
+                    <AnimatedQar value={selectedInvoice.deliveryFeeQar} prefix="+" className="font-mono tabular-nums" />
                   </div>
                 )}
                 <div className="border-t border-stone-200 pt-1 flex justify-between font-medium text-xs text-stone-900">
                   <span>Total Due:</span>
-                  <span className="font-mono tabular-nums">{formatQar(selectedInvoice.totalQar)}</span>
+                  <AnimatedQar value={selectedInvoice.totalQar} className="font-mono tabular-nums" />
                 </div>
               </div>
             </div>
@@ -482,7 +497,7 @@ export default function InvoicesPage() {
                 Close
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 

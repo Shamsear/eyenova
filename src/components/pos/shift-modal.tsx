@@ -18,6 +18,8 @@ import {
   Printer,
   Loader2,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { AnimatedQar } from '@/components/shared/animated-number';
 
 const OPENING_CHIPS = [200, 500, 1000, 1500];
 
@@ -172,8 +174,13 @@ export function ShiftModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] shadow-xl">
+    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+      >
         {/* Header (Swiss Light Style) */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -235,27 +242,27 @@ export function ShiftModal() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono">
                 <div className="p-2.5 bg-white border border-stone-200 rounded-lg">
                   <span className="text-[10px] text-stone-400 uppercase block">Opening Float</span>
-                  <span className="font-medium text-xs text-stone-800">{formatQar(openFloatNum)}</span>
+                  <AnimatedQar value={openFloatNum} className="font-medium text-xs text-stone-800" />
                 </div>
                 <div className="p-2.5 bg-white border border-stone-200 rounded-lg">
                   <span className="text-[10px] text-stone-400 uppercase block">Cash Sales</span>
-                  <span className="font-medium text-xs text-stone-800">{formatQar(cashSalesNum)}</span>
+                  <AnimatedQar value={cashSalesNum} className="font-medium text-xs text-stone-800" />
                 </div>
                 <div className="p-2.5 bg-white border border-stone-200 rounded-lg">
                   <span className="text-[10px] text-stone-400 uppercase block">Card Sales</span>
-                  <span className="font-medium text-xs text-stone-800">{formatQar(cardSalesNum)}</span>
+                  <AnimatedQar value={cardSalesNum} className="font-medium text-xs text-stone-800" />
                 </div>
                 <div className="p-2.5 bg-white border border-stone-200 rounded-lg">
                   <span className="text-[10px] text-stone-400 uppercase block">Mid-Shift Cash-In</span>
-                  <span className="font-medium text-xs text-stone-800">+{formatQar(cashInNum)}</span>
+                  <AnimatedQar value={cashInNum} prefix="+" className="font-medium text-xs text-stone-800" />
                 </div>
                 <div className="p-2.5 bg-white border border-stone-200 rounded-lg">
                   <span className="text-[10px] text-stone-400 uppercase block">Petty Cash Out</span>
-                  <span className="font-medium text-xs text-stone-800">-{formatQar(pettyCashNum)}</span>
+                  <AnimatedQar value={pettyCashNum} prefix="-" className="font-medium text-xs text-stone-800" />
                 </div>
                 <div className="p-2.5 bg-stone-100 border border-stone-300 rounded-lg">
                   <span className="text-[10px] text-stone-500 uppercase block font-semibold">Expected Cash</span>
-                  <span className="font-bold text-xs text-stone-900">{formatQar(expectedCash)}</span>
+                  <AnimatedQar value={expectedCash} className="font-bold text-xs text-stone-900" />
                 </div>
               </div>
 
@@ -418,7 +425,7 @@ export function ShiftModal() {
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

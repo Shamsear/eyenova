@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
 import { Store, Clock, Menu, Lock, Maximize2, Minimize2 } from 'lucide-react';
+import { AnimatedQar } from '@/components/shared/animated-number';
 
 interface TopbarProps {
   title: string;
@@ -133,7 +134,16 @@ export function Topbar({ title, subtitle }: TopbarProps) {
                 currentShift ? 'bg-emerald-600 animate-pulse' : 'bg-stone-400'
               }`}
             />
-            <span>{currentShift ? `Shift: ${formatQar(currentShift.expectedClosingCash)}` : 'Shift: Closed'}</span>
+            <span className="flex items-center gap-1">
+              {currentShift ? (
+                <>
+                  <span>Shift:</span>
+                  <AnimatedQar value={currentShift.expectedClosingCash} />
+                </>
+              ) : (
+                'Shift: Closed'
+              )}
+            </span>
           </button>
         )}
 

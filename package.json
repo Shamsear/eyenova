@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@number-flow/react": "^0.6.2",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4.3.3",
     "canvas-confetti": "^1.9.4",
@@ -17,6 +18,7 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lucide-react": "^1.59.0",
+    "motion": "^14.4.0",
     "next": "16.4.2",
     "postcss": "^8.5.31",
     "react": "19.3.0",

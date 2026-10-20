@@ -11,6 +11,7 @@ import {
   isOpticalProduct,
   isToricProduct,
 } from '@/lib/utils';
+import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 import { useSessionStore } from '@/stores/session-store';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
@@ -974,7 +975,7 @@ export default function PurchasesPage() {
       className: 'w-24 text-center whitespace-nowrap',
       render: (s) => (
         <span className="font-mono text-xs text-stone-700 tabular-nums truncate block">
-          {s.itemsCount} lines
+          <AnimatedCount value={s.itemsCount} suffix=" lines" />
         </span>
       ),
     },
@@ -983,9 +984,10 @@ export default function PurchasesPage() {
       header: 'Total Cost',
       className: 'w-32 text-right whitespace-nowrap',
       render: (s) => (
-        <span className="font-mono text-xs font-semibold text-stone-900 tabular-nums truncate block">
-          {formatQar(s.totalCostQar)}
-        </span>
+        <AnimatedQar
+          value={s.totalCostQar}
+          className="font-mono text-xs font-semibold text-stone-900 tabular-nums truncate block justify-end"
+        />
       ),
     },
     {
@@ -1055,7 +1057,7 @@ export default function PurchasesPage() {
       className: 'w-36 text-center whitespace-nowrap',
       render: (o) => (
         <span className="font-mono text-xs text-stone-700 tabular-nums truncate block">
-          {o.totalUnitsReceived} / {o.totalUnitsOrdered} pcs
+          <AnimatedCount value={o.totalUnitsReceived} /> / <AnimatedCount value={o.totalUnitsOrdered} suffix=" pcs" />
         </span>
       ),
     },
@@ -1064,9 +1066,10 @@ export default function PurchasesPage() {
       header: 'Total Cost',
       className: 'w-32 text-right whitespace-nowrap',
       render: (o) => (
-        <span className="font-mono text-xs font-semibold text-stone-900 tabular-nums truncate block">
-          {formatQar(o.totalAmountQar)}
-        </span>
+        <AnimatedQar
+          value={o.totalAmountQar}
+          className="font-mono text-xs font-semibold text-stone-900 tabular-nums truncate block justify-end"
+        />
       ),
     },
     {
@@ -1388,13 +1391,16 @@ export default function PurchasesPage() {
                     <span className="font-mono font-medium text-xs text-stone-900 truncate">
                       {s.invoiceNumber || 'GRN Shipment'}
                     </span>
-                    <span className="font-mono text-xs font-semibold text-stone-900 tabular-nums shrink-0">
-                      {formatQar(s.totalCostQar)}
-                    </span>
+                    <AnimatedQar
+                      value={s.totalCostQar}
+                      className="font-mono text-xs font-semibold text-stone-900 tabular-nums shrink-0"
+                    />
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[11px] min-w-0 text-stone-600">
                     <span className="truncate">{s.supplierName}</span>
-                    <span className="font-mono text-[10px] text-stone-400 shrink-0">{s.itemsCount} lines</span>
+                    <span className="font-mono text-[10px] text-stone-400 shrink-0">
+                      <AnimatedCount value={s.itemsCount} suffix=" lines" />
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-stone-400 min-w-0 pt-1 border-t border-stone-50">
                     <span className="truncate">{s.operatorName} • {s.receivedAt}</span>

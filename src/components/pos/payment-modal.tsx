@@ -15,6 +15,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { motion, AnimatePresence } from 'motion/react';
+import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 
 const QUICK_CASH_PRESETS = [50, 100, 200, 500];
 
@@ -148,15 +150,21 @@ export function PaymentModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col shadow-xl">
+    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col shadow-xl"
+      >
         {/* Modal Header (Swiss Light Style) */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="min-w-0">
             <h2 className="font-medium text-sm text-stone-900 truncate">Payment & Receipt</h2>
-            <span className="text-[11px] text-stone-500 font-mono truncate block">
-              Total Due: {formatQar(grandTotal)}
-            </span>
+            <div className="text-[11px] text-stone-500 font-mono truncate flex items-center gap-1">
+              <span>Total Due:</span>
+              <AnimatedQar value={grandTotal} />
+            </div>
           </div>
           <button
             onClick={() => setPaymentModalOpen(false)}
@@ -227,9 +235,10 @@ export function PaymentModal() {
               <span className="text-[10px] text-stone-500 block font-mono uppercase tracking-wider">
                 Total Payable
               </span>
-              <span className="text-xl font-medium text-stone-900 font-mono tabular-nums">
-                {formatQar(grandTotal)}
-              </span>
+              <AnimatedQar
+                value={grandTotal}
+                className="text-xl font-medium text-stone-900 font-mono tabular-nums"
+              />
             </div>
             <div className="text-right text-xs">
               <span className="text-stone-500">Client: </span>
@@ -243,7 +252,7 @@ export function PaymentModal() {
           {/* Optical Prescription & Items Summary */}
           <div className="border border-stone-200 rounded-md p-2 bg-stone-50/80 max-h-28 overflow-y-auto space-y-1 text-xs">
             <span className="text-[9px] font-mono uppercase tracking-wider text-stone-500 block mb-0.5">
-              Items & Optical Prescription ({lines.length})
+              Items & Optical Prescription (<AnimatedCount value={lines.length} />)
             </span>
             {lines.map((l) => (
               <div key={l.lineId} className="flex items-center justify-between text-[11px] gap-2 py-0.5 border-b border-stone-100 last:border-0">
@@ -253,9 +262,10 @@ export function PaymentModal() {
                     {formatOpticalSpecs(l)}
                   </span>
                 </div>
-                <span className="font-mono text-stone-700 shrink-0 text-right">
-                  {l.quantity}x {formatQar(l.unitPrice)}
-                </span>
+                <div className="font-mono text-stone-700 shrink-0 text-right flex items-center gap-1 justify-end">
+                  <AnimatedCount value={l.quantity} suffix="x" />
+                  <AnimatedQar value={l.unitPrice} />
+                </div>
               </div>
             ))}
           </div>
@@ -282,9 +292,11 @@ export function PaymentModal() {
                 <button
                   type="button"
                   onClick={() => setCashTendered(grandTotal.toFixed(2))}
-                  className="px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded text-[11px] font-mono text-stone-800 transition cursor-pointer"
+                  className="px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded text-[11px] font-mono text-stone-800 transition cursor-pointer flex items-center gap-1"
                 >
-                  Exact ({formatQar(grandTotal)})
+                  <span>Exact (</span>
+                  <AnimatedQar value={grandTotal} />
+                  <span>)</span>
                 </button>
                 {QUICK_CASH_PRESETS.map((amt) => (
                   <button
@@ -293,7 +305,7 @@ export function PaymentModal() {
                     onClick={() => setCashTendered(amt.toString())}
                     className="px-2 py-1 bg-stone-100 hover:bg-stone-200 rounded text-[11px] font-mono text-stone-800 transition cursor-pointer"
                   >
-                    {amt} QAR
+                    <AnimatedQar value={amt} />
                   </button>
                 ))}
               </div>
@@ -303,16 +315,19 @@ export function PaymentModal() {
                 {cashVal >= grandTotal ? (
                   <>
                     <span className="text-stone-600">Change Due:</span>
-                    <span className="font-mono font-medium text-sm text-emerald-700 tabular-nums">
-                      {formatQar(changeDue)}
-                    </span>
+                    <AnimatedQar
+                      value={changeDue}
+                      className="font-mono font-medium text-sm text-emerald-700 tabular-nums"
+                    />
                   </>
                 ) : (
                   <>
                     <span className="text-stone-600">Shortage:</span>
-                    <span className="font-mono font-medium text-sm text-rose-700 tabular-nums">
-                      -{formatQar(cashShortage)}
-                    </span>
+                    <AnimatedQar
+                      value={cashShortage}
+                      prefix="-"
+                      className="font-mono font-medium text-sm text-rose-700 tabular-nums"
+                    />
                   </>
                 )}
               </div>
@@ -364,7 +379,7 @@ export function PaymentModal() {
                     Card Portion (QAR)
                   </label>
                   <div className="w-full text-xs font-mono font-medium text-stone-900 bg-stone-100 border border-stone-200 rounded-md p-2 tabular-nums">
-                    {formatQar(splitCardVal)}
+                    <AnimatedQar value={splitCardVal} />
                   </div>
                 </div>
               </div>
@@ -390,17 +405,18 @@ export function PaymentModal() {
               <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-stone-600">Client Store Credit:</span>
-                  <span className="font-mono font-medium text-xs text-stone-900">{formatQar(customerStoreCredit)}</span>
+                  <AnimatedQar value={customerStoreCredit} className="font-mono font-medium text-xs text-stone-900" />
                 </div>
                 <div className="flex items-center justify-between border-t border-stone-200 pt-2 text-xs">
                   <span className="text-stone-600">Total Deducted:</span>
-                  <span className="font-mono font-medium text-xs text-stone-900">{formatQar(grandTotal)}</span>
+                  <AnimatedQar value={grandTotal} className="font-mono font-medium text-xs text-stone-900" />
                 </div>
                 <div className="flex items-center justify-between border-t border-stone-200 pt-2 text-xs">
                   <span className="text-stone-600">Remaining Credit Balance:</span>
-                  <span className={`font-mono font-medium text-xs ${customerStoreCredit >= grandTotal ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    {formatQar(Math.max(0, customerStoreCredit - grandTotal))}
-                  </span>
+                  <AnimatedQar
+                    value={Math.max(0, customerStoreCredit - grandTotal)}
+                    className={`font-mono font-medium text-xs ${customerStoreCredit >= grandTotal ? 'text-emerald-700' : 'text-rose-700'}`}
+                  />
                 </div>
               </div>
 
@@ -485,7 +501,7 @@ export function PaymentModal() {
             )}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

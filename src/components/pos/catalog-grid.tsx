@@ -5,6 +5,8 @@ import { ProductItem } from '@/lib/types';
 import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
 import { Search, Loader2, Filter, X } from 'lucide-react';
+import { motion } from 'motion/react';
+import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 import { Pagination } from '@/components/shared/pagination';
 
 const CATEGORY_LABEL_MAP: Record<string, string> = {
@@ -212,7 +214,7 @@ export function CatalogGrid() {
               >
                 <span>{cat.label}</span>
                 <span className={`text-[10px] tabular-nums ${isSelected ? 'text-stone-300' : 'text-stone-400'}`}>
-                  ({cat.count})
+                  (<AnimatedCount value={cat.count} />)
                 </span>
               </button>
             );
@@ -237,7 +239,7 @@ export function CatalogGrid() {
                 >
                   <span>{b.label}</span>
                   <span className={`text-[9px] tabular-nums ${isSelected ? 'text-amber-100' : 'text-stone-400'}`}>
-                    ({b.count})
+                    (<AnimatedCount value={b.count} />)
                   </span>
                 </button>
               );
@@ -296,8 +298,11 @@ export function CatalogGrid() {
                 .toUpperCase();
 
               return (
-                <button
+                <motion.button
                   key={product.id}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.15 }}
                   onClick={() => handleProductClick(product)}
                   className="bg-white border border-stone-200 rounded-lg p-2 text-left hover:border-stone-400 transition-colors flex flex-col justify-between group cursor-pointer min-h-[145px]"
                 >
@@ -326,9 +331,10 @@ export function CatalogGrid() {
                           isOutStock ? 'bg-rose-600' : isLowStock ? 'bg-amber-600' : 'bg-emerald-600'
                         }`}
                       />
-                      <span className="text-[9px] font-mono text-stone-600 tabular-nums">
-                        {product.stockQuantity}
-                      </span>
+                      <AnimatedCount
+                        value={product.stockQuantity}
+                        className="text-[9px] font-mono text-stone-600 tabular-nums"
+                      />
                     </div>
                   </div>
 
@@ -347,14 +353,15 @@ export function CatalogGrid() {
 
                   {/* Price & Quick Add Button (Single-Line) */}
                   <div className="mt-1 pt-1 border-t border-stone-100 flex items-center justify-between">
-                    <span className="font-medium text-xs text-stone-900 font-mono tabular-nums">
-                      {formatQar(price)}
-                    </span>
+                    <AnimatedQar
+                      value={price}
+                      className="font-medium text-xs text-stone-900 font-mono tabular-nums"
+                    />
                     <span className="w-4.5 h-4.5 rounded bg-stone-100 group-hover:bg-stone-900 group-hover:text-white text-stone-700 flex items-center justify-center text-xs font-medium transition">
                       +
                     </span>
                   </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>

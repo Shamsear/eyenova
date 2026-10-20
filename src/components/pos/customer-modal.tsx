@@ -5,6 +5,8 @@ import { usePosStore } from '@/stores/pos-store';
 import { CustomerItem } from '@/lib/types';
 import { X, User, Phone, Mail, Search, UserPlus, Check, Loader2 } from 'lucide-react';
 import { formatQar } from '@/lib/utils';
+import { motion } from 'motion/react';
+import { AnimatedQar } from '@/components/shared/animated-number';
 
 export function CustomerModal() {
   const { isCustomerModalOpen, setCustomerModalOpen, setCustomer, showToast } = usePosStore();
@@ -103,8 +105,13 @@ export function CustomerModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-xl">
+    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-xl"
+      >
         {/* Header (Swiss Light Style) */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -207,8 +214,9 @@ export function CustomerModal() {
                       </div>
 
                       {c.storeCreditQar && c.storeCreditQar > 0 ? (
-                        <span className="text-[10px] font-mono font-medium text-emerald-700 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
-                          Credit: {formatQar(c.storeCreditQar)}
+                        <span className="text-[10px] font-mono font-medium text-emerald-700 bg-stone-100 px-1.5 py-0.5 rounded shrink-0 flex items-center gap-1">
+                          <span>Credit:</span>
+                          <AnimatedQar value={c.storeCreditQar} />
                         </span>
                       ) : (
                         <span className="text-[10px] font-mono text-stone-400 group-hover:text-stone-900 shrink-0">Select</span>
@@ -283,7 +291,7 @@ export function CustomerModal() {
             </form>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

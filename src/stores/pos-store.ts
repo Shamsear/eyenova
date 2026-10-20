@@ -223,16 +223,73 @@ export const usePosStore = create<PosState>()(
         const { lines } = get();
         const price = product.salePriceQar ?? product.basePriceQar;
         const isOptical = isOpticalProduct(product);
+        const inStockBatches = (product.batches || []).filter((b) => (b.quantity ?? 0) > 0);
 
         const targetEye = config?.eye ?? (isOptical ? 'OD' : '');
-        const targetPower = config?.power ?? null;
-        const isPlano = Boolean(config?.isPlano);
 
-        // Check if an exact matching line exists (matching product, eye, and power)
+        // 1. Resolve target optical specs FIRST
+        let targetPower: string | null = config?.power !== undefined ? config.power : null;
+        let targetCyl: string | null = config?.cylinder !== undefined ? config.cylinder : null;
+        let targetAxis: number | null = config?.axis !== undefined ? config.axis : null;
+        let targetAdd: string | null = config?.addPower !== undefined ? config.addPower : null;
+        let isPlano = Boolean(config?.isPlano);
+
+        if (targetPower === null && isOptical) {
+          // Find the first batch with remaining stock not yet exhausted by lines already in cart
+          const availableBatch = inStockBatches.find((b) => {
+            const bP = b.power ? b.power.trim() : '0.00';
+            const normBP = bP === '0.00' || bP.toLowerCase().includes('plano') ? '0.00' : bP;
+            const alreadyUsed = lines
+              .filter(
+                (l) =>
+                  l.productId === product.id &&
+                  (l.isPlano ? '0.00' : (l.power ? l.power.trim() : '0.00')) === normBP
+              )
+              .reduce((sum, l) => sum + l.quantity, 0);
+            return (b.quantity || 0) > alreadyUsed;
+          });
+
+          if (availableBatch) {
+            targetPower = availableBatch.power || '0.00';
+            targetCyl = targetCyl ?? availableBatch.cylinder ?? null;
+            targetAxis = targetAxis ?? availableBatch.axis ?? null;
+            targetAdd = targetAdd ?? availableBatch.addPower ?? null;
+            isPlano = targetPower === '0.00' || targetPower.toLowerCase().includes('plano');
+          } else if (inStockBatches.length > 0) {
+            // All specific batches are already in cart at max stock
+            get().showToast(
+              'Stock Limit',
+              `All available in-stock powers for ${product.titleEn} are already added to your cart.`,
+              false
+            );
+            return;
+          } else if (product.power) {
+            targetPower = String(product.power);
+            isPlano = targetPower === '0.00' || targetPower.toLowerCase().includes('plano');
+          } else if (product.availablePowers && product.availablePowers.length > 0) {
+            targetPower = product.availablePowers[0];
+            isPlano = targetPower === '0.00' || targetPower.toLowerCase().includes('plano');
+          } else if (product.hasPlanoOption) {
+            targetPower = '0.00';
+            isPlano = true;
+          } else {
+            targetPower = '0.00';
+            isPlano = true;
+          }
+        }
+
+        const normTargetPower = isPlano ? '0.00' : (targetPower ? targetPower.trim() : '0.00');
+
+        // 2. Check if an exact matching line exists (matching product, eye, and optical power)
         const existingIndex = lines.findIndex((l) => {
           if (l.productId !== product.id) return false;
           if (targetEye && l.eye !== targetEye) return false;
-          if (targetPower && (l.isPlano ? '0.00' : l.power) !== (isPlano ? '0.00' : targetPower)) return false;
+          if (isOptical) {
+            const normLinePower = l.isPlano ? '0.00' : (l.power ? l.power.trim() : '0.00');
+            if (normLinePower !== normTargetPower) return false;
+            if (targetCyl && (l.cylinder || '') !== targetCyl) return false;
+            if (targetAxis !== null && (l.axis || null) !== targetAxis) return false;
+          }
           return true;
         });
 
@@ -256,44 +313,13 @@ export const usePosStore = create<PosState>()(
           updated[existingIndex].quantity = wantedQty;
           set({ lines: updated, selectedLineId: updated[existingIndex].lineId });
         } else {
-          const inStockBatches = (product.batches || []).filter((b) => (b.quantity ?? 0) > 0);
-          const firstInStockBatch = inStockBatches[0];
-
-          let defaultPower = config?.power || null;
-          let defaultCyl = config?.cylinder || null;
-          let defaultAxis = config?.axis || null;
-          let defaultAdd = config?.addPower || null;
-          let defaultPlano = Boolean(config?.isPlano);
-
-          if (!defaultPower) {
-            if (firstInStockBatch?.power) {
-              defaultPower = firstInStockBatch.power;
-              defaultCyl = defaultCyl ?? firstInStockBatch.cylinder ?? null;
-              defaultAxis = defaultAxis ?? firstInStockBatch.axis ?? null;
-              defaultAdd = defaultAdd ?? firstInStockBatch.addPower ?? null;
-              defaultPlano = defaultPower === '0.00' || defaultPower.toLowerCase().includes('plano');
-            } else if (product.power) {
-              defaultPower = String(product.power);
-              defaultPlano = defaultPower === '0.00' || defaultPower.toLowerCase().includes('plano');
-            } else if (product.availablePowers && product.availablePowers.length > 0) {
-              defaultPower = product.availablePowers[0];
-              defaultPlano = defaultPower === '0.00' || defaultPower.toLowerCase().includes('plano');
-            } else if (product.hasPlanoOption) {
-              defaultPower = '0.00';
-              defaultPlano = true;
-            } else {
-              defaultPower = isOptical ? '0.00' : null;
-              defaultPlano = isOptical;
-            }
-          }
-
           const lensSummary = formatOpticalSpecs({
             eye: targetEye,
-            power: defaultPower,
-            cylinder: defaultCyl,
-            axis: defaultAxis,
-            addPower: defaultAdd,
-            isPlano: defaultPlano,
+            power: targetPower,
+            cylinder: targetCyl,
+            axis: targetAxis,
+            addPower: targetAdd,
+            isPlano,
             productType: product.productType,
           }) || (isOptical ? 'Standard' : '');
 
@@ -309,11 +335,11 @@ export const usePosStore = create<PosState>()(
             lensPrice: 0,
             quantity: config?.quantity || 1,
             eye: targetEye,
-            power: defaultPower,
-            cylinder: defaultCyl,
-            axis: defaultAxis,
-            addPower: defaultAdd,
-            isPlano: defaultPlano,
+            power: targetPower,
+            cylinder: targetCyl,
+            axis: targetAxis,
+            addPower: targetAdd,
+            isPlano,
             lensSummary,
             imageUrl: product.imageUrl,
             stockQuantity: product.stockQuantity,
@@ -338,7 +364,10 @@ export const usePosStore = create<PosState>()(
           }
 
           const { lines: consolidated, selectedLineId } = consolidateLines([...lines, newLine], newLine.lineId);
-          set({ lines: consolidated, selectedLineId });
+          set({
+            lines: consolidated,
+            selectedLineId: selectedLineId || newLine.lineId,
+          });
         }
       },
 

@@ -248,7 +248,29 @@ export function CatalogGrid() {
 
       {/* Product Grid Area (flex-1 min-h-0 overflow-y-auto) */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-2.5">
-        {loading ? (
+        {loading && allProducts.length === 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white border border-stone-200/80 rounded-lg p-2.5 flex flex-col justify-between h-[104px] animate-pulse"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="w-12 h-2.5 bg-stone-100 rounded" />
+                    <div className="w-10 h-2.5 bg-stone-100 rounded" />
+                  </div>
+                  <div className="w-3/4 h-3.5 bg-stone-200/70 rounded" />
+                  <div className="w-1/2 h-2.5 bg-stone-100 rounded" />
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-stone-100">
+                  <div className="w-14 h-3.5 bg-stone-200 rounded" />
+                  <div className="w-5 h-5 bg-stone-100 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : loading ? (
           <div className="h-48 flex flex-col items-center justify-center text-stone-400 gap-2">
             <Loader2 className="animate-spin text-stone-600" size={20} />
             <span className="text-xs font-mono">Loading catalog...</span>

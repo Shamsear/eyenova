@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -81,10 +81,22 @@ const navSections: NavSection[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const activeItemRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // When pathname changes or on mount, auto-scroll and focus the active link
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }
+  }, [pathname, mounted]);
 
   const {
     user,
@@ -97,7 +109,7 @@ export function Sidebar() {
     setMobileMenuOpen,
   } = useSessionStore();
 
-  const userIsAdmin = mounted ? isAdmin() : false;
+  const userIsAdmin = mounted && user ? isAdmin() : true;
   const collapsed = mounted ? isSidebarCollapsed : false;
   const currentUser = mounted ? user : null;
 
@@ -108,6 +120,13 @@ export function Sidebar() {
       items: section.items.filter((item) => !item.adminOnly || userIsAdmin),
     }))
     .filter((section) => section.items.length > 0);
+
+  const isItemActive = (href: string) => {
+    if (href === '/pos') {
+      return pathname === '/pos' || pathname === '/';
+    }
+    return pathname === href || pathname?.startsWith(href + '/');
+  };
 
   return (
     <>
@@ -193,26 +212,39 @@ export function Sidebar() {
                 </div>
               )}
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+                const isActive = isItemActive(item.href);
                 const Icon = item.icon;
 
                 return (
                   <Link
                     key={item.href}
+                    ref={isActive ? activeItemRef : undefined}
                     href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition group ${
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all duration-150 group cursor-pointer ${
                       isActive
-                        ? 'bg-stone-200/70 text-stone-900 font-medium'
-                        : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
-                    } ${collapsed && !isMobileMenuOpen ? 'justify-center px-0' : ''}`}
+                        ? 'bg-stone-900 text-white font-medium shadow-xs'
+                        : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
+                    } ${collapsed && !isMobileMenuOpen ? 'justify-center px-0 w-9 h-9 mx-auto' : ''}`}
                     title={collapsed && !isMobileMenuOpen ? `${item.title} (${item.shortcut})` : undefined}
                   >
-                    <Icon size={15} className={isActive ? 'text-stone-900 shrink-0' : 'text-stone-400 group-hover:text-stone-700 shrink-0'} />
+                    <Icon
+                      size={15}
+                      className={`shrink-0 transition-colors ${
+                        isActive ? 'text-white' : 'text-stone-400 group-hover:text-stone-700'
+                      }`}
+                    />
                     {(!collapsed || isMobileMenuOpen) && (
                       <>
                         <span className="truncate flex-1">{item.title}</span>
-                        <span className="text-[9px] font-mono text-stone-400 shrink-0">
+                        <span
+                          className={`text-[9px] font-mono px-1 py-0.5 rounded shrink-0 transition-colors ${
+                            isActive
+                              ? 'bg-stone-800 text-stone-300'
+                              : 'text-stone-400 group-hover:text-stone-600'
+                          }`}
+                        >
                           {item.shortcut}
                         </span>
                       </>

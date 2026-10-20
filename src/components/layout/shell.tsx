@@ -10,6 +10,7 @@ import { ShiftModal } from '@/components/pos/shift-modal';
 import { useSessionStore } from '@/stores/session-store';
 import { usePosStore } from '@/stores/pos-store';
 import { ShieldAlert, KeyRound, ShoppingCart, X } from 'lucide-react';
+import { Rise } from 'cube-motion/react';
 
 interface ShellProps {
   title: string;
@@ -102,23 +103,28 @@ export function Shell({ title, subtitle, children }: ShellProps) {
       {/* If station is locked or not logged in, overlay login screen */}
       {mounted && (!isLoggedIn || isStationLocked) && <LoginOverlay />}
 
-      {/* Floating Single-Line Minimalist Toast Notification */}
-      {toast && toast.visible && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2.5 bg-white border border-stone-200 shadow-md rounded-lg px-3 py-2.5 max-w-sm animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <span
-            className={`w-2 h-2 rounded-full shrink-0 ${
-              toast.isSuccess ? 'bg-emerald-600' : 'bg-red-600'
-            }`}
-          />
-          <div className="flex-1 min-w-0 text-xs">
-            <span className="font-medium text-stone-900 mr-1.5 truncate">{toast.title}:</span>
-            <span className="text-stone-500 truncate">{toast.message}</span>
-          </div>
-          <button onClick={hideToast} className="text-stone-400 hover:text-stone-700 cursor-pointer p-0.5">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {/* Floating Single-Line Minimalist Toast Notification with Cube-Motion */}
+      <Rise
+        show={Boolean(toast && toast.visible)}
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-2.5 bg-white border border-stone-200 shadow-md rounded-lg px-3 py-2.5 max-w-sm"
+      >
+        {toast && (
+          <>
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                toast.isSuccess ? 'bg-emerald-600' : 'bg-red-600'
+              }`}
+            />
+            <div className="flex-1 min-w-0 text-xs">
+              <span className="font-medium text-stone-900 mr-1.5 truncate">{toast.title}:</span>
+              <span className="text-stone-500 truncate">{toast.message}</span>
+            </div>
+            <button onClick={hideToast} className="text-stone-400 hover:text-stone-700 cursor-pointer p-0.5">
+              <X size={14} />
+            </button>
+          </>
+        )}
+      </Rise>
 
       {/* Persistent Global Register Shift Modal */}
       <ShiftModal />

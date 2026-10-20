@@ -7,6 +7,7 @@ import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
 import { Store, Clock, Menu, Lock, Maximize2, Minimize2 } from 'lucide-react';
 import { AnimatedQar } from '@/components/shared/animated-number';
+import { Morph } from 'cube-motion/react';
 
 interface TopbarProps {
   title: string;
@@ -165,7 +166,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           </div>
         )}
 
-        {/* Fullscreen Toggle Button */}
+        {/* Fullscreen Toggle Button with Cube-Motion Morph */}
         <button
           onClick={() => toggleFullscreen()}
           title={isFullscreen ? 'Exit Fullscreen (Esc / F11)' : 'Enter Fullscreen (F11)'}
@@ -175,8 +176,21 @@ export function Topbar({ title, subtitle }: TopbarProps) {
               : 'hover:bg-stone-100 text-stone-500 hover:text-stone-900'
           }`}
         >
-          {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-          <span className="text-[11px] hidden md:inline">{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>
+          <Morph
+            active={isFullscreen}
+            off={
+              <span className="flex items-center gap-1">
+                <Maximize2 size={12} />
+                <span className="text-[11px] hidden md:inline">Fullscreen</span>
+              </span>
+            }
+            on={
+              <span className="flex items-center gap-1">
+                <Minimize2 size={12} />
+                <span className="text-[11px] hidden md:inline">Exit Full</span>
+              </span>
+            }
+          />
         </button>
 
         {/* Lock Station Button */}

@@ -8,6 +8,7 @@ import { Search, Loader2, Filter, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 import { Pagination } from '@/components/shared/pagination';
+import { Rise } from 'cube-motion/react';
 
 const CATEGORY_LABEL_MAP: Record<string, string> = {
   COLORED_CONTACT_LENSES: 'Colored Lenses',
@@ -284,7 +285,7 @@ export function CatalogGrid() {
             <span className="text-[11px] text-stone-400">Try adjusting your brand, search terms or category filter.</span>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2">
+          <Rise as="div" targets="children" stagger={20} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-2">
             {paginatedProducts.map((product) => {
               const price = product.salePriceQar ?? product.basePriceQar;
               const isLowStock = product.stockQuantity > 0 && product.stockQuantity <= product.minStockAlert;
@@ -364,7 +365,7 @@ export function CatalogGrid() {
                 </motion.button>
               );
             })}
-          </div>
+          </Rise>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Pagination } from './pagination';
 import { EmptyState } from './empty-state';
 import { Search } from 'lucide-react';
+import { Rise } from 'cube-motion/react';
 
 export interface Column<T> {
   key: string;
@@ -127,7 +128,7 @@ export function DataTable<T>({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <Rise as="tbody" targets="children" stagger={15} className="divide-y divide-stone-100">
                 {paginatedData.map((item) => {
                   const rowKey = keyExtractor(item);
                   return (
@@ -159,11 +160,11 @@ export function DataTable<T>({
                     </tr>
                   );
                 })}
-              </tbody>
+              </Rise>
             </table>
 
-            {/* Mobile / Small Devices Card View (Rendered on screens < 768px) */}
-            <div className="md:hidden p-2.5 space-y-2">
+            {/* Mobile / Small Devices Card View with Cube-Motion Rise */}
+            <Rise as="div" targets="children" stagger={20} className="md:hidden p-2.5 space-y-2">
               {paginatedData.map((item) => {
                 const cardKey = keyExtractor(item);
 
@@ -219,7 +220,7 @@ export function DataTable<T>({
                   </div>
                 );
               })}
-            </div>
+            </Rise>
           </>
         )}
       </div>

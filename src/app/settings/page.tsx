@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { Building, Printer, Check, Save, Loader2, RotateCcw } from 'lucide-react';
+import { Morph } from 'cube-motion/react';
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
@@ -106,10 +107,30 @@ export default function SettingsPage() {
               type="button"
               onClick={() => handleSave()}
               disabled={saving}
-              className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap"
+              className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap min-w-[120px]"
             >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              <span>Save Changes</span>
+              {saving ? (
+                <>
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <Morph
+                  active={saved}
+                  off={
+                    <span className="flex items-center gap-1.5">
+                      <Save size={13} />
+                      <span>Save Changes</span>
+                    </span>
+                  }
+                  on={
+                    <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                      <Check size={13} />
+                      <span>Saved!</span>
+                    </span>
+                  }
+                />
+              )}
             </button>
           </div>
         </div>

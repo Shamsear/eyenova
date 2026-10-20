@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
         orderDate: formatQatarDate(po.orderDate),
         orderDateRaw: po.orderDate.toISOString(),
         expectedDeliveryDate: po.expectedDeliveryDate ? formatQatarDate(po.expectedDeliveryDate) : null,
+        expectedDeliveryDateRaw: po.expectedDeliveryDate ? po.expectedDeliveryDate.toISOString().slice(0, 10) : null,
         totalAmountQar: Number(po.totalAmountQar),
         receivingStatus: po.receivingStatus, // ORDERED | FULLY_RECEIVED | PARTIALLY_RECEIVED | CANCELLED
         paymentStatus: po.paymentStatus,
@@ -551,6 +552,193 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ success: true, supplier });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 5: UPDATE_PO (Edit Official Purchase Order)
+    // ----------------------------------------------------
+    if (action === 'UPDATE_PO') {
+      const {
+        poId,
+        poNumber,
+        supplierId,
+        supplierInvoiceNumber,
+        orderDate,
+        expectedDeliveryDate,
+        notes,
+        receivingStatus,
+        items,
+      } = body;
+
+      if (!poId) {
+        return NextResponse.json({ error: 'Purchase Order ID is required.' }, { status: 400 });
+      }
+
+      const totalCost = (items || []).reduce(
+        (sum: number, it: any) => sum + Number(it.quantity || 1) * Number(it.unitCostQar || 0),
+        0
+      );
+
+      // Recreate line items if updated items list is provided
+      if (items && Array.isArray(items)) {
+        await prisma.purchaseOrderItem.deleteMany({
+          where: { purchaseOrderId: poId },
+        });
+      }
+
+      const updatedPo = await prisma.purchaseOrder.update({
+        where: { id: poId },
+        data: {
+          poNumber: poNumber?.trim() || undefined,
+          supplierId: supplierId || undefined,
+          supplierInvoiceNumber: supplierInvoiceNumber !== undefined ? (supplierInvoiceNumber?.trim() || null) : undefined,
+          orderDate: orderDate ? new Date(orderDate) : undefined,
+          expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null,
+          receivingStatus: receivingStatus || undefined,
+          subtotalQar: items ? totalCost : undefined,
+          totalAmountQar: items ? totalCost : undefined,
+          notes: notes !== undefined ? (notes?.trim() || null) : undefined,
+          updatedAt: new Date(),
+          ...(items && Array.isArray(items)
+            ? {
+                PurchaseOrderItem: {
+                  create: items.map((it: any) => ({
+                    id: `POI-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    productId: it.productId,
+                    power: it.power || null,
+                    cylinder: it.cylinder || null,
+                    axis: it.axis ? parseInt(it.axis, 10) : null,
+                    orderedQuantity: parseInt(it.quantity || '1', 10),
+                    receivedQuantity: parseInt(it.receivedQuantity || '0', 10),
+                    unitCostOriginal: Number(it.unitCostQar || 0),
+                    unitCostQar: Number(it.unitCostQar || 0),
+                    totalCostQar: Number(it.quantity || 1) * Number(it.unitCostQar || 0),
+                  })),
+                },
+              }
+            : {}),
+        },
+        include: {
+          Supplier: true,
+          PurchaseOrderItem: true,
+        },
+      });
+
+      return NextResponse.json({ success: true, po: updatedPo });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 6: DELETE_PO (Delete Purchase Order)
+    // ----------------------------------------------------
+    if (action === 'DELETE_PO') {
+      const { poId } = body;
+      if (!poId) return NextResponse.json({ error: 'PO ID is required.' }, { status: 400 });
+
+      const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
+      if (!po) return NextResponse.json({ error: 'Purchase order not found.' }, { status: 404 });
+      if (po.receivingStatus === 'FULLY_RECEIVED') {
+        return NextResponse.json({ error: 'Cannot delete a fully received purchase order.' }, { status: 400 });
+      }
+
+      await prisma.purchaseOrder.delete({ where: { id: poId } });
+      return NextResponse.json({ success: true, message: 'Purchase order deleted successfully.' });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 7: UPDATE_SHIPMENT (Edit Inbound Shipment / GRN)
+    // ----------------------------------------------------
+    if (action === 'UPDATE_SHIPMENT') {
+      const {
+        shipmentId,
+        invoiceNumber,
+        receivedAt,
+        deliveredByName,
+        supplierRepContact,
+        notes,
+      } = body;
+
+      if (!shipmentId) {
+        return NextResponse.json({ error: 'Shipment ID is required.' }, { status: 400 });
+      }
+
+      const updated = await prisma.supplierPurchase.update({
+        where: { id: shipmentId },
+        data: {
+          invoiceNumber: invoiceNumber !== undefined ? (invoiceNumber?.trim() || null) : undefined,
+          receivedAt: receivedAt ? new Date(receivedAt) : undefined,
+          deliveredByName: deliveredByName !== undefined ? (deliveredByName?.trim() || null) : undefined,
+          supplierRepContact: supplierRepContact !== undefined ? (supplierRepContact?.trim() || null) : undefined,
+          notes: notes !== undefined ? (notes?.trim() || null) : undefined,
+        },
+      });
+
+      return NextResponse.json({ success: true, shipment: updated });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 8: DELETE_SHIPMENT (Delete Inbound Shipment / GRN)
+    // ----------------------------------------------------
+    if (action === 'DELETE_SHIPMENT') {
+      const { shipmentId } = body;
+      if (!shipmentId) return NextResponse.json({ error: 'Shipment ID is required.' }, { status: 400 });
+
+      await prisma.supplierPurchase.delete({ where: { id: shipmentId } });
+      return NextResponse.json({ success: true, message: 'Inbound shipment deleted successfully.' });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 9: UPDATE_SUPPLIER (Edit Optical Vendor)
+    // ----------------------------------------------------
+    if (action === 'UPDATE_SUPPLIER') {
+      const {
+        supplierId,
+        name,
+        contactPerson,
+        phone,
+        email,
+        creditTerms,
+        notes,
+        isMultiBrand,
+      } = body;
+
+      if (!supplierId || !name) {
+        return NextResponse.json({ error: 'Supplier ID and Name are required.' }, { status: 400 });
+      }
+
+      const updated = await prisma.supplier.update({
+        where: { id: supplierId },
+        data: {
+          name: name.trim(),
+          contactPerson: contactPerson !== undefined ? (contactPerson?.trim() || null) : undefined,
+          phone: phone !== undefined ? (phone?.trim() || null) : undefined,
+          email: email !== undefined ? (email?.trim() || null) : undefined,
+          creditTerms: creditTerms || undefined,
+          notes: notes !== undefined ? (notes?.trim() || null) : undefined,
+          isMultiBrand: isMultiBrand !== undefined ? Boolean(isMultiBrand) : undefined,
+          updatedAt: new Date(),
+        },
+      });
+
+      return NextResponse.json({ success: true, supplier: updated });
+    }
+
+    // ----------------------------------------------------
+    // ACTION 10: DELETE_SUPPLIER (Delete Optical Vendor)
+    // ----------------------------------------------------
+    if (action === 'DELETE_SUPPLIER') {
+      const { supplierId } = body;
+      if (!supplierId) return NextResponse.json({ error: 'Supplier ID is required.' }, { status: 400 });
+
+      const linkedOrders = await prisma.purchaseOrder.count({ where: { supplierId } });
+      if (linkedOrders > 0) {
+        return NextResponse.json(
+          { error: `Cannot delete supplier with ${linkedOrders} linked purchase order(s).` },
+          { status: 400 }
+        );
+      }
+
+      await prisma.supplier.delete({ where: { id: supplierId } });
+      return NextResponse.json({ success: true, message: 'Supplier deleted successfully.' });
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

@@ -31,6 +31,7 @@ import {
   Printer,
   Loader2,
   Trash2,
+  Edit3,
   ArrowRight,
   TrendingDown,
 } from 'lucide-react';
@@ -87,6 +88,7 @@ interface PurchaseOrder {
   supplierContact: string | null;
   orderDate: string;
   expectedDeliveryDate: string | null;
+  expectedDeliveryDateRaw?: string | null;
   totalAmountQar: number;
   receivingStatus: 'ORDERED' | 'FULLY_RECEIVED' | 'PARTIALLY_RECEIVED' | 'CANCELLED';
   paymentStatus: string;
@@ -176,6 +178,18 @@ export default function PurchasesPage() {
   const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [selectedPo, setSelectedPo] = useState<PurchaseOrder | null>(null);
+
+  // Edit state
+  const [editingPoId, setEditingPoId] = useState<string | null>(null);
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+
+  // Edit Shipment State
+  const [isEditingShipment, setIsEditingShipment] = useState(false);
+  const [editShipmentInvoice, setEditShipmentInvoice] = useState('');
+  const [editShipmentDeliveredBy, setEditShipmentDeliveredBy] = useState('');
+  const [editShipmentContact, setEditShipmentContact] = useState('');
+  const [editShipmentNotes, setEditShipmentNotes] = useState('');
+  const [editShipmentDate, setEditShipmentDate] = useState('');
 
   // Form submission state
   const [submitting, setSubmitting] = useState(false);
@@ -566,7 +580,55 @@ export default function PurchasesPage() {
     setItemAxis('');
   };
 
-  // Submit Create PO
+  // Open Edit PO
+  const openEditPo = (po: PurchaseOrder) => {
+    setEditingPoId(po.id);
+    setPoNumber(po.poNumber);
+    setPoSupplierId(po.supplierId);
+    setPoExpectedDelivery(po.expectedDeliveryDateRaw || (po.expectedDeliveryDate && po.expectedDeliveryDate.length === 10 ? po.expectedDeliveryDate : ''));
+    setPoNotes(po.notes || '');
+    setDraftItems(
+      (po.items || []).map((it) => ({
+        productId: it.productId,
+        productTitle: it.productTitle,
+        brandName: it.brandName || 'EyeNova',
+        sku: it.sku || '',
+        quantity: it.orderedQuantity,
+        unitCostQar: it.unitCostQar,
+        totalCostQar: it.totalCostQar,
+        power: it.power,
+        cylinder: it.cylinder,
+        axis: it.axis,
+      }))
+    );
+    setFormError('');
+    setIsCreatePoOpen(true);
+  };
+
+  // Delete PO
+  const handleDeletePo = async (poId: string, poNum: string) => {
+    if (!confirm(`Are you sure you want to delete Purchase Order ${poNum}? This cannot be undone.`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE_PO', poId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to delete PO');
+      if (selectedPo?.id === poId) setSelectedPo(null);
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Submit Create or Update PO
   const handleSubmitCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!poSupplierId || draftItems.length === 0) {
@@ -578,39 +640,49 @@ export default function PurchasesPage() {
     setFormError('');
 
     try {
+      const payload: any = {
+        action: editingPoId ? 'UPDATE_PO' : 'CREATE_PO',
+        supplierId: poSupplierId,
+        expectedDeliveryDate: poExpectedDelivery || undefined,
+        notes: poNotes,
+        createdByName: user?.fullName || 'Cashier',
+        items: draftItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitCostQar: item.unitCostQar,
+          power: item.power,
+          cylinder: item.cylinder || null,
+          axis: item.axis || null,
+        })),
+      };
+
+      if (editingPoId) {
+        payload.poId = editingPoId;
+        if (poNumber) payload.poNumber = poNumber;
+      } else {
+        if (poNumber) payload.poNumber = poNumber;
+      }
+
       const res = await fetch('/api/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'CREATE_PO',
-          poNumber: poNumber || undefined,
-          supplierId: poSupplierId,
-          expectedDeliveryDate: poExpectedDelivery || undefined,
-          notes: poNotes,
-          createdByName: user?.fullName || 'Cashier',
-          items: draftItems.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitCostQar: item.unitCostQar,
-            power: item.power,
-            cylinder: item.cylinder || null,
-            axis: item.axis || null,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to create PO');
+      if (!res.ok || data.error) throw new Error(data.error || (editingPoId ? 'Failed to update PO' : 'Failed to create PO'));
 
       setIsCreatePoOpen(false);
+      setEditingPoId(null);
       setDraftItems([]);
       setPoSupplierId('');
+      setPoNumber('');
       setPoNotes('');
       loadData();
       setActiveTab('ORDERS');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setFormError(errorMsg || 'Error creating Purchase Order');
+      setFormError(errorMsg || (editingPoId ? 'Error updating Purchase Order' : 'Error creating Purchase Order'));
     } finally {
       setSubmitting(false);
     }
@@ -712,7 +784,108 @@ export default function PurchasesPage() {
     }
   };
 
-  // Submit Add Vendor
+  // Open Edit Supplier
+  const openEditSupplier = (sup: Supplier) => {
+    setEditingSupplierId(sup.id);
+    setVName(sup.name);
+    setVContact(sup.contactPerson || '');
+    setVPhone(sup.phone || '');
+    setVEmail(sup.email || '');
+    setVCreditTerms(sup.creditTerms || 'COD');
+    setVNotes(sup.notes || '');
+    setVIsMultiBrand(!!sup.isMultiBrand);
+    setFormError('');
+    setIsAddVendorOpen(true);
+  };
+
+  // Delete Supplier
+  const handleDeleteSupplier = async (supId: string, supName: string) => {
+    if (!confirm(`Are you sure you want to delete supplier "${supName}"? This can only be done if no orders are linked.`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE_SUPPLIER', supplierId: supId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to delete supplier');
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Open Edit Shipment
+  const openEditShipment = (s: Shipment) => {
+    setSelectedShipment(s);
+    setEditShipmentInvoice(s.invoiceNumber || '');
+    setEditShipmentDeliveredBy(s.deliveredByName || '');
+    setEditShipmentContact(s.supplierRepContact || '');
+    setEditShipmentNotes(s.notes || '');
+    setEditShipmentDate(s.receivedAt || '');
+    setIsEditingShipment(true);
+  };
+
+  // Save Shipment Edits
+  const handleSaveShipment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShipment) return;
+    setSubmitting(true);
+    setFormError('');
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'UPDATE_SHIPMENT',
+          shipmentId: selectedShipment.id,
+          invoiceNumber: editShipmentInvoice,
+          deliveredByName: editShipmentDeliveredBy,
+          supplierRepContact: editShipmentContact,
+          notes: editShipmentNotes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to update shipment');
+      setIsEditingShipment(false);
+      setSelectedShipment(null);
+      loadData();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete Shipment
+  const handleDeleteShipment = async (shipmentId: string, invoiceNum: string) => {
+    if (!confirm(`Are you sure you want to delete shipment ${invoiceNum || 'record'}? This cannot be undone.`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/purchases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE_SHIPMENT', shipmentId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to delete shipment');
+      if (selectedShipment?.id === shipmentId) setSelectedShipment(null);
+      loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Submit Add or Update Vendor
   const handleSubmitAddVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vName) {
@@ -724,25 +897,32 @@ export default function PurchasesPage() {
     setFormError('');
 
     try {
+      const payload: any = {
+        action: editingSupplierId ? 'UPDATE_SUPPLIER' : 'CREATE_SUPPLIER',
+        name: vName,
+        contactPerson: vContact,
+        phone: vPhone,
+        email: vEmail,
+        creditTerms: vCreditTerms,
+        notes: vNotes,
+        isMultiBrand: vIsMultiBrand,
+      };
+
+      if (editingSupplierId) {
+        payload.supplierId = editingSupplierId;
+      }
+
       const res = await fetch('/api/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'CREATE_SUPPLIER',
-          name: vName,
-          contactPerson: vContact,
-          phone: vPhone,
-          email: vEmail,
-          creditTerms: vCreditTerms,
-          notes: vNotes,
-          isMultiBrand: vIsMultiBrand,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Failed to create vendor');
+      if (!res.ok || data.error) throw new Error(data.error || (editingSupplierId ? 'Failed to update vendor' : 'Failed to create vendor'));
 
       setIsAddVendorOpen(false);
+      setEditingSupplierId(null);
       setVName('');
       setVContact('');
       setVPhone('');
@@ -753,7 +933,7 @@ export default function PurchasesPage() {
       setActiveTab('SUPPLIERS');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setFormError(errorMsg || 'Error creating vendor');
+      setFormError(errorMsg || (editingSupplierId ? 'Error updating vendor' : 'Error creating vendor'));
     } finally {
       setSubmitting(false);
     }
@@ -817,15 +997,34 @@ export default function PurchasesPage() {
     {
       key: 'actions',
       header: 'Actions',
-      className: 'w-20 text-right whitespace-nowrap',
+      className: 'w-24 text-right whitespace-nowrap',
       render: (s) => (
-        <button
-          onClick={() => setSelectedShipment(s)}
-          className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition cursor-pointer"
-          title="View GRN Details"
-        >
-          <Eye size={13} />
-        </button>
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => {
+              setIsEditingShipment(false);
+              setSelectedShipment(s);
+            }}
+            className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition cursor-pointer"
+            title="View GRN Details"
+          >
+            <Eye size={13} />
+          </button>
+          <button
+            onClick={() => openEditShipment(s)}
+            className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition cursor-pointer"
+            title="Edit Shipment"
+          >
+            <Edit3 size={13} />
+          </button>
+          <button
+            onClick={() => handleDeleteShipment(s.id, s.invoiceNumber)}
+            className="p-1 rounded hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition cursor-pointer"
+            title="Delete Shipment"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       ),
     },
   ];
@@ -895,7 +1094,7 @@ export default function PurchasesPage() {
     {
       key: 'actions',
       header: 'Actions',
-      className: 'w-24 text-right whitespace-nowrap',
+      className: 'w-36 text-right whitespace-nowrap',
       render: (o) => (
         <div className="flex items-center justify-end gap-1">
           {o.receivingStatus !== 'FULLY_RECEIVED' && (
@@ -913,6 +1112,22 @@ export default function PurchasesPage() {
           >
             <Eye size={13} />
           </button>
+          <button
+            onClick={() => openEditPo(o)}
+            className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition cursor-pointer"
+            title="Edit Purchase Order"
+          >
+            <Edit3 size={13} />
+          </button>
+          {o.receivingStatus !== 'FULLY_RECEIVED' && (
+            <button
+              onClick={() => handleDeletePo(o.id, o.poNumber)}
+              className="p-1 rounded hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition cursor-pointer"
+              title="Delete Purchase Order"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       ),
     },
@@ -1063,6 +1278,29 @@ export default function PurchasesPage() {
         </span>
       ),
     },
+    {
+      key: 'actions',
+      header: 'Actions',
+      className: 'w-20 text-right whitespace-nowrap',
+      render: (sup) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            onClick={() => openEditSupplier(sup)}
+            className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition cursor-pointer"
+            title="Edit Vendor"
+          >
+            <Edit3 size={13} />
+          </button>
+          <button
+            onClick={() => handleDeleteSupplier(sup.id, sup.name)}
+            className="p-1 rounded hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition cursor-pointer"
+            title="Delete Vendor"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -1158,9 +1396,34 @@ export default function PurchasesPage() {
                     <span className="truncate">{s.supplierName}</span>
                     <span className="font-mono text-[10px] text-stone-400 shrink-0">{s.itemsCount} lines</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-stone-400 min-w-0">
-                    <span className="truncate">{s.operatorName}</span>
-                    <span className="shrink-0">{s.receivedAt}</span>
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-stone-400 min-w-0 pt-1 border-t border-stone-50">
+                    <span className="truncate">{s.operatorName} • {s.receivedAt}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => {
+                          setIsEditingShipment(false);
+                          setSelectedShipment(s);
+                        }}
+                        className="p-1 rounded bg-stone-100 text-stone-600 hover:text-stone-900 transition cursor-pointer"
+                        title="View"
+                      >
+                        <Eye size={12} />
+                      </button>
+                      <button
+                        onClick={() => openEditShipment(s)}
+                        className="p-1 rounded bg-stone-100 text-stone-600 hover:text-stone-900 transition cursor-pointer"
+                        title="Edit"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteShipment(s.id, s.invoiceNumber)}
+                        className="p-1 rounded bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1201,9 +1464,41 @@ export default function PurchasesPage() {
                       {o.totalUnitsReceived}/{o.totalUnitsOrdered} pcs
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono min-w-0">
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono min-w-0 pt-1 border-t border-stone-50">
                     <span className="text-stone-500 truncate">{o.orderDate}</span>
-                    <span className="text-stone-700 uppercase font-semibold">{o.receivingStatus.replace(/_/g, ' ')}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {o.receivingStatus !== 'FULLY_RECEIVED' && (
+                        <button
+                          onClick={() => openReceiveForPo(o)}
+                          className="px-1.5 py-0.5 rounded bg-stone-900 text-stone-50 text-[10px] font-mono hover:bg-stone-800 transition cursor-pointer"
+                        >
+                          Receive
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelectedPo(o)}
+                        className="p-1 rounded bg-stone-100 text-stone-600 hover:text-stone-900 transition cursor-pointer"
+                        title="View"
+                      >
+                        <Eye size={12} />
+                      </button>
+                      <button
+                        onClick={() => openEditPo(o)}
+                        className="p-1 rounded bg-stone-100 text-stone-600 hover:text-stone-900 transition cursor-pointer"
+                        title="Edit"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      {o.receivingStatus !== 'FULLY_RECEIVED' && (
+                        <button
+                          onClick={() => handleDeletePo(o.id, o.poNumber)}
+                          className="p-1 rounded bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                          title="Delete"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -1317,17 +1612,24 @@ export default function PurchasesPage() {
                     <span className="truncate">{sup.contactPerson || 'No contact'}</span>
                     <span className="font-mono text-[10px] text-stone-400 shrink-0">{sup.phone || '—'}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-stone-400 min-w-0">
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono text-stone-400 min-w-0 pt-1 border-t border-stone-50">
                     <span className="truncate">{sup.email || '—'}</span>
-                    <span
-                      className={`text-[9px] px-1 py-0.2 rounded border uppercase font-mono ${
-                        sup.isMultiBrand
-                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      }`}
-                    >
-                      {sup.isMultiBrand ? 'Multi' : 'Brand'}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openEditSupplier(sup)}
+                        className="p-1 rounded bg-stone-100 text-stone-600 hover:text-stone-900 transition cursor-pointer"
+                        title="Edit"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSupplier(sup.id, sup.name)}
+                        className="p-1 rounded bg-rose-50 text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1342,11 +1644,14 @@ export default function PurchasesPage() {
           <div className="bg-white rounded-lg border border-stone-200 w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
             <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
               <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <Plus size={14} className="text-stone-500" />
-                <span>Create Official Purchase Order (PO)</span>
+                {editingPoId ? <Edit3 size={14} className="text-stone-500" /> : <Plus size={14} className="text-stone-500" />}
+                <span>{editingPoId ? `Edit Purchase Order (${poNumber || 'PO'})` : 'Create Official Purchase Order (PO)'}</span>
               </h3>
               <button
-                onClick={() => setIsCreatePoOpen(false)}
+                onClick={() => {
+                  setIsCreatePoOpen(false);
+                  setEditingPoId(null);
+                }}
                 className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
               >
                 <X size={15} />
@@ -1360,7 +1665,18 @@ export default function PurchasesPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-stone-700 font-medium mb-1">PO Number</label>
+                  <input
+                    type="text"
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Auto-generated if empty"
+                    className="w-full p-2 bg-white border border-stone-300 rounded text-xs font-mono text-stone-900"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-stone-700 font-medium mb-1">Supplier</label>
                   <SearchableSelect
@@ -1567,7 +1883,10 @@ export default function PurchasesPage() {
               <div className="pt-2 flex justify-end gap-2 border-t border-stone-200">
                 <button
                   type="button"
-                  onClick={() => setIsCreatePoOpen(false)}
+                  onClick={() => {
+                    setIsCreatePoOpen(false);
+                    setEditingPoId(null);
+                  }}
                   className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
                 >
                   Cancel
@@ -1578,7 +1897,7 @@ export default function PurchasesPage() {
                   className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  <span>Issue Purchase Order</span>
+                  <span>{editingPoId ? 'Save Changes' : 'Issue Purchase Order'}</span>
                 </button>
               </div>
             </form>
@@ -1932,76 +2251,208 @@ export default function PurchasesPage() {
         </div>
       )}
 
-      {/* MODAL 4: View Shipment GRN Details */}
+      {/* MODAL 4: View / Edit Shipment GRN */}
       {selectedShipment && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
           <div className="bg-white rounded-lg border border-stone-200 w-full max-w-xl max-h-[85vh] overflow-hidden shadow-xl flex flex-col">
             <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 truncate">
-                Goods Received Note (GRN) — {selectedShipment.invoiceNumber}
+              <h3 className="font-semibold text-xs text-stone-900 truncate flex items-center gap-1.5">
+                {isEditingShipment ? <Edit3 size={14} className="text-stone-500" /> : <PackageCheck size={14} className="text-stone-500" />}
+                <span>
+                  {isEditingShipment
+                    ? `Edit Inbound Shipment (GRN) — ${selectedShipment.invoiceNumber}`
+                    : `Goods Received Note (GRN) — ${selectedShipment.invoiceNumber}`}
+                </span>
               </h3>
               <button
-                onClick={() => setSelectedShipment(null)}
+                onClick={() => {
+                  setSelectedShipment(null);
+                  setIsEditingShipment(false);
+                }}
                 className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
               >
                 <X size={15} />
               </button>
             </div>
 
-            <div className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
-              <div className="p-3 bg-stone-50 rounded border border-stone-200 grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px]">
-                <div>
-                  <span className="text-stone-400 block uppercase">Supplier</span>
-                  <span className="font-semibold text-stone-900 block truncate">{selectedShipment.supplierName}</span>
-                </div>
-                <div>
-                  <span className="text-stone-400 block uppercase">Received Date</span>
-                  <span className="text-stone-700 block truncate">{selectedShipment.receivedAt}</span>
-                </div>
-                <div>
-                  <span className="text-stone-400 block uppercase">Total Cost</span>
-                  <span className="font-semibold text-stone-900 block tabular-nums">{formatQar(selectedShipment.totalCostQar)}</span>
-                </div>
-              </div>
+            {isEditingShipment ? (
+              <form onSubmit={handleSaveShipment} className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+                {formError && (
+                  <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
+                    {formError}
+                  </div>
+                )}
 
-              <div>
-                <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider block mb-1">
-                  Received Items ({selectedShipment.items.length})
-                </span>
-                <div className="divide-y divide-stone-100 border border-stone-200 rounded overflow-hidden">
-                  {selectedShipment.items.map((it) => (
-                    <div key={it.id} className="p-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-stone-900 block truncate">{it.productTitle}</span>
-                        <span className="text-[10px] text-stone-400 font-mono block truncate">
-                          Batch: {it.batchNumber} • Exp: {it.expiryDate || 'N/A'} • PWR: {it.power || 'Plano'}
-                        </span>
-                      </div>
-                      <div className="text-right shrink-0 font-mono">
-                        <span className="font-medium text-stone-900 block tabular-nums">{it.quantity} pcs</span>
-                        <span className="text-[10px] text-stone-500 block tabular-nums">{formatQar(it.totalCostQar)}</span>
-                      </div>
+                <div className="p-3 bg-stone-50 rounded border border-stone-200">
+                  <span className="text-[10px] font-mono text-stone-400 uppercase block mb-1">Supplier</span>
+                  <span className="font-semibold text-stone-900 text-xs">{selectedShipment.supplierName}</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1">GRN / Invoice #</label>
+                    <input
+                      type="text"
+                      required
+                      value={editShipmentInvoice}
+                      onChange={(e) => setEditShipmentInvoice(e.target.value)}
+                      className="w-full p-2 bg-white border border-stone-300 rounded text-xs font-mono text-stone-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1">Delivered By</label>
+                    <input
+                      type="text"
+                      value={editShipmentDeliveredBy}
+                      onChange={(e) => setEditShipmentDeliveredBy(e.target.value)}
+                      placeholder="Delivery courier / driver"
+                      className="w-full p-2 bg-white border border-stone-300 rounded text-xs text-stone-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1">Supplier Rep Contact</label>
+                    <input
+                      type="text"
+                      value={editShipmentContact}
+                      onChange={(e) => setEditShipmentContact(e.target.value)}
+                      placeholder="Representative phone / contact"
+                      className="w-full p-2 bg-white border border-stone-300 rounded text-xs text-stone-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-700 font-medium mb-1">Notes / Remarks</label>
+                    <input
+                      type="text"
+                      value={editShipmentNotes}
+                      onChange={(e) => setEditShipmentNotes(e.target.value)}
+                      placeholder="Optional notes"
+                      className="w-full p-2 bg-white border border-stone-300 rounded text-xs text-stone-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2 border-t border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingShipment(false)}
+                    className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    <span>Save GRN Changes</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+                  <div className="p-3 bg-stone-50 rounded border border-stone-200 grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                    <div>
+                      <span className="text-stone-400 block uppercase">Supplier</span>
+                      <span className="font-semibold text-stone-900 block truncate">{selectedShipment.supplierName}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                    <div>
+                      <span className="text-stone-400 block uppercase">Received Date</span>
+                      <span className="text-stone-700 block truncate">{selectedShipment.receivedAt}</span>
+                    </div>
+                    <div>
+                      <span className="text-stone-400 block uppercase">Total Cost</span>
+                      <span className="font-semibold text-stone-900 block tabular-nums">{formatQar(selectedShipment.totalCostQar)}</span>
+                    </div>
+                  </div>
 
-            <div className="px-4 py-2.5 border-t border-stone-200 flex justify-end gap-2 shrink-0">
-              <button
-                onClick={() => window.print()}
-                className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
-              >
-                <Printer size={13} />
-                <span>Print GRN</span>
-              </button>
-              <button
-                onClick={() => setSelectedShipment(null)}
-                className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+                  {(selectedShipment.deliveredByName || selectedShipment.supplierRepContact || selectedShipment.notes) && (
+                    <div className="p-2.5 bg-stone-50/80 rounded border border-stone-200 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                      {selectedShipment.deliveredByName && (
+                        <div>
+                          <span className="text-stone-400 block text-[10px]">Delivered By</span>
+                          <span className="text-stone-800 font-medium">{selectedShipment.deliveredByName}</span>
+                        </div>
+                      )}
+                      {selectedShipment.supplierRepContact && (
+                        <div>
+                          <span className="text-stone-400 block text-[10px]">Supplier Rep</span>
+                          <span className="text-stone-800 font-medium">{selectedShipment.supplierRepContact}</span>
+                        </div>
+                      )}
+                      {selectedShipment.notes && (
+                        <div>
+                          <span className="text-stone-400 block text-[10px]">Notes</span>
+                          <span className="text-stone-800">{selectedShipment.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div>
+                    <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider block mb-1">
+                      Received Items ({selectedShipment.items.length})
+                    </span>
+                    <div className="divide-y divide-stone-100 border border-stone-200 rounded overflow-hidden">
+                      {selectedShipment.items.map((it) => (
+                        <div key={it.id} className="p-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-medium text-stone-900 block truncate">{it.productTitle}</span>
+                            <span className="text-[10px] text-stone-400 font-mono block truncate">
+                              Batch: {it.batchNumber} • Exp: {it.expiryDate || 'N/A'} • PWR: {it.power || 'Plano'}
+                            </span>
+                          </div>
+                          <div className="text-right shrink-0 font-mono">
+                            <span className="font-medium text-stone-900 block tabular-nums">{it.quantity} pcs</span>
+                            <span className="text-[10px] text-stone-500 block tabular-nums">{formatQar(it.totalCostQar)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 py-2.5 border-t border-stone-200 flex justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => openEditShipment(selectedShipment)}
+                      className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 size={13} />
+                      <span>Edit GRN</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteShipment(selectedShipment.id, selectedShipment.invoiceNumber)}
+                      className="px-3 py-1.5 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium hover:bg-rose-100 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Printer size={13} />
+                      <span>Print</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedShipment(null)}
+                      className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2063,41 +2514,68 @@ export default function PurchasesPage() {
               </div>
             </div>
 
-            <div className="px-4 py-2.5 border-t border-stone-200 flex justify-end gap-2 shrink-0">
-              {selectedPo.receivingStatus !== 'FULLY_RECEIVED' && (
+            <div className="px-4 py-2.5 border-t border-stone-200 flex justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => {
                     const po = selectedPo;
                     setSelectedPo(null);
-                    openReceiveForPo(po);
+                    openEditPo(po);
                   }}
-                  className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
+                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
                 >
-                  Receive Shipment
+                  <Edit3 size={13} />
+                  <span>Edit PO</span>
                 </button>
-              )}
-              <button
-                onClick={() => setSelectedPo(null)}
-                className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
-              >
-                Close
-              </button>
+                {selectedPo.receivingStatus !== 'FULLY_RECEIVED' && (
+                  <button
+                    onClick={() => handleDeletePo(selectedPo.id, selectedPo.poNumber)}
+                    className="px-3 py-1.5 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium hover:bg-rose-100 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete</span>
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {selectedPo.receivingStatus !== 'FULLY_RECEIVED' && (
+                  <button
+                    onClick={() => {
+                      const po = selectedPo;
+                      setSelectedPo(null);
+                      openReceiveForPo(po);
+                    }}
+                    className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
+                  >
+                    Receive Shipment
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedPo(null)}
+                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 6: Add Vendor */}
+      {/* MODAL 6: Add / Edit Vendor */}
       {isAddVendorOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
           <div className="bg-white rounded-lg border border-stone-200 w-full max-w-md overflow-hidden shadow-xl flex flex-col">
             <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
               <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <Building2 size={14} className="text-stone-500" />
-                <span>Add Supplier / Vendor</span>
+                {editingSupplierId ? <Edit3 size={14} className="text-stone-500" /> : <Building2 size={14} className="text-stone-500" />}
+                <span>{editingSupplierId ? 'Edit Supplier Profile' : 'Add Supplier / Vendor'}</span>
               </h3>
               <button
-                onClick={() => setIsAddVendorOpen(false)}
+                onClick={() => {
+                  setIsAddVendorOpen(false);
+                  setEditingSupplierId(null);
+                }}
                 className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
               >
                 <X size={15} />
@@ -2193,7 +2671,10 @@ export default function PurchasesPage() {
               <div className="pt-2 flex justify-end gap-2 border-t border-stone-200">
                 <button
                   type="button"
-                  onClick={() => setIsAddVendorOpen(false)}
+                  onClick={() => {
+                    setIsAddVendorOpen(false);
+                    setEditingSupplierId(null);
+                  }}
                   className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
                 >
                   Cancel
@@ -2204,7 +2685,7 @@ export default function PurchasesPage() {
                   className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  <span>Save Vendor</span>
+                  <span>{editingSupplierId ? 'Save Changes' : 'Save Vendor'}</span>
                 </button>
               </div>
             </form>

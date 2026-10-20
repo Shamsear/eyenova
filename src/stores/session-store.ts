@@ -29,6 +29,7 @@ interface SessionState {
   toggleSidebar: () => void;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
+  setFullscreen: (isFullscreen: boolean) => void;
   toggleFullscreen: () => void;
 
   // Role permissions
@@ -94,7 +95,47 @@ export const useSessionStore = create<SessionState>()(
       toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
       setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
       toggleMobileMenu: () => set((state) => ({ isMobileMenuOpen: !state.isMobileMenuOpen })),
-      toggleFullscreen: () => set((state) => ({ isFullscreen: !state.isFullscreen })),
+      setFullscreen: (val: boolean) => set({ isFullscreen: val }),
+      toggleFullscreen: async () => {
+        if (typeof window === 'undefined') return;
+        const doc = document as any;
+        const isCurrentlyFs = !!(
+          doc.fullscreenElement ||
+          doc.webkitFullscreenElement ||
+          doc.mozFullScreenElement ||
+          doc.msFullscreenElement
+        );
+
+        try {
+          if (!isCurrentlyFs) {
+            const el = document.documentElement as any;
+            if (el.requestFullscreen) {
+              await el.requestFullscreen();
+            } else if (el.webkitRequestFullscreen) {
+              await el.webkitRequestFullscreen();
+            } else if (el.mozRequestFullScreen) {
+              await el.mozRequestFullScreen();
+            } else if (el.msRequestFullscreen) {
+              await el.msRequestFullscreen();
+            }
+            set({ isFullscreen: true });
+          } else {
+            if (doc.exitFullscreen) {
+              await doc.exitFullscreen();
+            } else if (doc.webkitExitFullscreen) {
+              await doc.webkitExitFullscreen();
+            } else if (doc.mozCancelFullScreen) {
+              await doc.mozCancelFullScreen();
+            } else if (doc.msExitFullscreen) {
+              await doc.msExitFullscreen();
+            }
+            set({ isFullscreen: false });
+          }
+        } catch (err) {
+          console.warn('[EyeNova] Browser fullscreen request error:', err);
+          set((state) => ({ isFullscreen: !state.isFullscreen }));
+        }
+      },
 
       // Computed permissions
       isSuperAdmin: () => get().user?.role === 'SUPER_ADMIN',
@@ -121,6 +162,14 @@ export const useSessionStore = create<SessionState>()(
     {
       name: 'eyenova-session-storage',
       version: 3,
+      partialize: (state) => ({
+        isLoggedIn: state.isLoggedIn,
+        isStationLocked: state.isStationLocked,
+        user: state.user,
+        store: state.store,
+        shift: state.shift,
+        isSidebarCollapsed: state.isSidebarCollapsed,
+      }),
       migrate: (persistedState: any) => {
         if (persistedState) {
           if (

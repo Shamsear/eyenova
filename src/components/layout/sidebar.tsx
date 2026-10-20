@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
+  Minimize2,
   SlidersHorizontal,
   Lock,
 } from 'lucide-react';
@@ -104,10 +105,38 @@ export function Sidebar() {
     lockStation,
     isSidebarCollapsed,
     toggleSidebar,
+    isFullscreen,
     toggleFullscreen,
+    setFullscreen,
     isMobileMenuOpen,
     setMobileMenuOpen,
   } = useSessionStore();
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleFsChange = () => {
+      const doc = document as any;
+      const activeFs = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      );
+      setFullscreen(activeFs);
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
+    };
+  }, [setFullscreen]);
 
   const userIsAdmin = mounted && user ? isAdmin() : true;
   const collapsed = mounted ? isSidebarCollapsed : false;
@@ -267,12 +296,20 @@ export function Sidebar() {
             {(!collapsed || isMobileMenuOpen) && <span className="truncate">Lock</span>}
           </button>
           <button
-            onClick={toggleFullscreen}
-            title="Toggle Fullscreen (F11)"
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded hover:bg-stone-100 transition cursor-pointer"
+            onClick={() => toggleFullscreen()}
+            title={isFullscreen ? 'Exit Fullscreen (Esc / F11)' : 'Toggle Fullscreen (F11)'}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded transition cursor-pointer ${
+              isFullscreen ? 'bg-stone-900 text-stone-50 hover:bg-stone-800' : 'hover:bg-stone-100 text-stone-600'
+            }`}
           >
-            <Maximize2 size={12} className="text-stone-500" />
-            {(!collapsed || isMobileMenuOpen) && <span className="truncate">Fullscreen</span>}
+            {isFullscreen ? (
+              <Minimize2 size={12} className={isFullscreen ? 'text-stone-300' : 'text-stone-500'} />
+            ) : (
+              <Maximize2 size={12} className="text-stone-500" />
+            )}
+            {(!collapsed || isMobileMenuOpen) && (
+              <span className="truncate">{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>
+            )}
           </button>
         </div>
       </aside>

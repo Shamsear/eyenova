@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
 import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
-import { Store, Clock, Menu, Lock } from 'lucide-react';
+import { Store, Clock, Menu, Lock, Maximize2, Minimize2 } from 'lucide-react';
 
 interface TopbarProps {
   title: string;
@@ -15,7 +15,7 @@ interface TopbarProps {
 export function Topbar({ title, subtitle }: TopbarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const { user, store, shift, setShift, toggleMobileMenu, lockStation, isStaff } = useSessionStore();
+  const { user, store, shift, setShift, toggleMobileMenu, lockStation, isStaff, isFullscreen, toggleFullscreen } = useSessionStore();
   const { setShiftModalOpen } = usePosStore();
   const [timeStr, setTimeStr] = useState<string>('');
 
@@ -154,6 +154,20 @@ export function Topbar({ title, subtitle }: TopbarProps) {
             <span className="truncate max-w-[90px] hidden sm:inline">{currentUser.fullName}</span>
           </div>
         )}
+
+        {/* Fullscreen Toggle Button */}
+        <button
+          onClick={() => toggleFullscreen()}
+          title={isFullscreen ? 'Exit Fullscreen (Esc / F11)' : 'Enter Fullscreen (F11)'}
+          className={`p-1 rounded transition flex items-center gap-1 cursor-pointer shrink-0 ${
+            isFullscreen
+              ? 'bg-stone-900 text-stone-50 hover:bg-stone-800'
+              : 'hover:bg-stone-100 text-stone-500 hover:text-stone-900'
+          }`}
+        >
+          {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          <span className="text-[11px] hidden md:inline">{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>
+        </button>
 
         {/* Lock Station Button */}
         <button

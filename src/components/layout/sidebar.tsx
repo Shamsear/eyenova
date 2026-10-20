@@ -176,35 +176,58 @@ export function Sidebar() {
         }`}
       >
         {/* Brand Header */}
-        <div className="h-11 border-b border-stone-200 flex items-center justify-between px-3 shrink-0 bg-white">
-          <Link href="/pos" className="flex items-center gap-2 overflow-hidden group">
-            <div className="w-6 h-6 rounded-md bg-stone-100 border border-stone-200 p-0.5 flex items-center justify-center shrink-0">
+        {collapsed && !isMobileMenuOpen ? (
+          <div className="h-11 border-b border-stone-200 flex items-center justify-center px-1.5 shrink-0 bg-white">
+            <button
+              onClick={toggleSidebar}
+              title="EyeNova Optics (Click to expand sidebar)"
+              aria-label="Expand Sidebar"
+              className="w-8 h-8 rounded-md bg-stone-100 hover:bg-stone-200 border border-stone-200 p-1 flex items-center justify-center shrink-0 transition cursor-pointer relative group"
+            >
               <Image
                 src="/logo.png"
                 alt="EyeNova Logo"
-                width={18}
-                height={18}
-                className="object-contain"
+                width={22}
+                height={22}
+                className="object-contain transition-opacity duration-150 group-hover:opacity-20"
                 style={{ width: 'auto', height: 'auto' }}
               />
-            </div>
-            {(!collapsed || isMobileMenuOpen) && (
+              <ChevronRight
+                size={14}
+                className="absolute inset-0 m-auto text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+              />
+            </button>
+          </div>
+        ) : (
+          <div className="h-11 border-b border-stone-200 flex items-center justify-between px-3 shrink-0 bg-white">
+            <Link href="/pos" className="flex items-center gap-2 overflow-hidden group min-w-0">
+              <div className="w-6 h-6 rounded-md bg-stone-100 border border-stone-200 p-0.5 flex items-center justify-center shrink-0">
+                <Image
+                  src="/logo.png"
+                  alt="EyeNova Logo"
+                  width={18}
+                  height={18}
+                  className="object-contain"
+                  style={{ width: 'auto', height: 'auto' }}
+                />
+              </div>
               <div className="truncate">
                 <span className="font-medium text-stone-900 text-xs tracking-tight block leading-tight truncate">
                   EyeNova Optics
                 </span>
               </div>
-            )}
-          </Link>
+            </Link>
 
-          <button
-            onClick={toggleSidebar}
-            className="hidden md:flex w-5 h-5 rounded hover:bg-stone-100 text-stone-400 hover:text-stone-700 items-center justify-center transition cursor-pointer"
-            aria-label="Toggle Navigation Width"
-          >
-            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-          </button>
-        </div>
+            <button
+              onClick={toggleSidebar}
+              className="hidden md:flex w-5 h-5 rounded hover:bg-stone-100 text-stone-400 hover:text-stone-700 items-center justify-center transition cursor-pointer shrink-0"
+              aria-label="Collapse Navigation"
+              title="Collapse Sidebar"
+            >
+              <ChevronLeft size={13} />
+            </button>
+          </div>
+        )}
 
         {/* Operator Profile Card */}
         {currentUser && (!collapsed || isMobileMenuOpen) && (

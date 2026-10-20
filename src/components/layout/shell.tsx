@@ -35,8 +35,24 @@ export function Shell({ title, subtitle, children }: ShellProps) {
   const userIsAdmin = mounted ? isAdmin() : true;
   const isBlocked = mounted && isRestrictedRoute && !userIsAdmin;
 
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 z-50 bg-stone-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-white border border-stone-200 p-2 flex items-center justify-center shadow-xs">
+            <span className="font-semibold text-xs tracking-tight text-stone-900">EN</span>
+          </div>
+          <div className="flex items-center gap-2 text-stone-500 text-xs font-mono">
+            <div className="w-3.5 h-3.5 border-2 border-stone-400 border-t-stone-900 rounded-full animate-spin" />
+            <span>Loading EyeNova...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // If station is locked or not logged in, show Fullscreen POS Login Screen
-  if (mounted && (!isLoggedIn || isStationLocked)) {
+  if (!isLoggedIn || isStationLocked) {
     return <LoginOverlay />;
   }
 

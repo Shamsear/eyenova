@@ -159,10 +159,33 @@ export function LoginOverlay() {
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-100/90 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-xl border border-stone-200 w-full max-w-3xl overflow-hidden flex flex-col md:flex-row min-h-[460px] shadow-sm">
-        {/* Left Information Pane (Stone-50) */}
-        <div className="w-full md:w-64 bg-stone-50 p-5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-stone-200 shrink-0">
+    <div className="fixed inset-0 z-50 bg-stone-100/95 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="bg-white rounded-2xl border border-stone-200 w-full max-w-3xl overflow-hidden flex flex-col md:flex-row shadow-lg my-auto max-h-[96dvh] md:max-h-none overflow-y-auto md:overflow-visible">
+        {/* Mobile Header Banner (< md) */}
+        <div className="md:hidden bg-stone-50 px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-white border border-stone-200 p-1 flex items-center justify-center shrink-0">
+              <Image
+                src="/logo.png"
+                alt="EyeNova Optics"
+                width={18}
+                height={18}
+                className="object-contain"
+              />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-semibold text-xs tracking-tight text-stone-900 truncate">EyeNova Optics</h2>
+              <p className="text-[10px] text-stone-500 font-mono truncate">{selectedStore?.name || 'Retail Register'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-mono shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+            <span>Online</span>
+          </div>
+        </div>
+
+        {/* Desktop Sidebar (>= md) */}
+        <div className="hidden md:flex md:w-64 bg-stone-50 p-5 flex-col justify-between border-r border-stone-200 shrink-0">
           <div className="space-y-5">
             {/* Brand Header */}
             <div className="flex items-center gap-2.5">
@@ -216,17 +239,17 @@ export function LoginOverlay() {
         </div>
 
         {/* Right Form Area */}
-        <div className="flex-1 p-5 md:p-6 flex flex-col justify-between bg-white text-stone-900 min-w-0">
+        <div className="flex-1 p-4 sm:p-5 md:p-6 flex flex-col justify-between bg-white text-stone-900 min-w-0">
           <div>
             {/* Header with Store Selector */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-stone-200">
-              <div>
-                <h1 className="text-sm font-medium text-stone-900 truncate">Cashier Sign In</h1>
-                <p className="text-[11px] text-stone-500 truncate">Select operator profile and enter PIN</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-stone-200">
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-stone-900">Cashier Sign In</h1>
+                <p className="text-[11px] text-stone-500">Select operator profile and enter PIN</p>
               </div>
 
               {stores.length > 0 && (
-                <div className="w-[190px]">
+                <div className="w-full sm:w-[190px]">
                   <SearchableSelect
                     value={selectedStore?.id || ''}
                     onChange={(val) => {
@@ -247,32 +270,40 @@ export function LoginOverlay() {
             </div>
 
             {/* Two Column Grid: Operators & PIN */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 sm:gap-5 pt-3 sm:pt-4">
               {/* Operator Profiles */}
               <div className="md:col-span-6 space-y-2">
-                <span className="text-[10px] font-mono text-stone-400 uppercase tracking-wider block">
-                  Select Profile
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-stone-400 uppercase tracking-wider block">
+                    1. Select Profile
+                  </span>
+                  {selectedUser && (
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      Selected: {selectedUser.fullName.split(' ')[0]}
+                    </span>
+                  )}
+                </div>
 
                 {loading ? (
-                  <div className="py-8 flex flex-col items-center justify-center gap-2 text-stone-400 text-xs">
+                  <div className="py-6 flex flex-col items-center justify-center gap-2 text-stone-400 text-xs">
                     <Loader2 size={16} className="animate-spin text-stone-600" />
                     <span>Loading profiles...</span>
                   </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-1.5 max-h-[140px] sm:max-h-[180px] md:max-h-[220px] overflow-y-auto pr-0.5">
                     {users.map((u) => {
                       const isSelected = selectedUser?.id === u.id;
                       return (
-                        <div
+                        <button
                           key={u.id}
+                          type="button"
                           onClick={() => {
                             setSelectedUser(u);
                             setErrorMessage('');
                           }}
-                          className={`px-2.5 py-2 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 min-w-0 ${
+                          className={`w-full px-2.5 py-2 rounded-lg border transition-all text-left flex items-center justify-between gap-2 min-w-0 cursor-pointer ${
                             isSelected
-                              ? 'bg-stone-100 border-stone-900 text-stone-900 font-medium'
+                              ? 'bg-stone-900 border-stone-900 text-white font-medium shadow-xs'
                               : 'bg-white border-stone-200 hover:bg-stone-50 text-stone-700'
                           }`}
                         >
@@ -280,7 +311,7 @@ export function LoginOverlay() {
                             <div
                               className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-mono shrink-0 ${
                                 isSelected
-                                  ? 'bg-stone-900 text-white'
+                                  ? 'bg-white text-stone-900 font-bold'
                                   : 'bg-stone-100 text-stone-600'
                               }`}
                             >
@@ -289,10 +320,16 @@ export function LoginOverlay() {
                             <span className="text-xs truncate">{u.fullName}</span>
                           </div>
 
-                          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200/60 shrink-0">
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${
+                              isSelected
+                                ? 'bg-stone-800 text-stone-200 border-stone-700'
+                                : 'bg-stone-100 text-stone-600 border-stone-200/60'
+                            }`}
+                          >
                             {u.roleBadge}
                           </span>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -300,9 +337,9 @@ export function LoginOverlay() {
               </div>
 
               {/* PIN Keypad */}
-              <div className="md:col-span-6 space-y-2.5">
+              <div className="md:col-span-6 space-y-2">
                 <span className="text-[10px] font-mono text-stone-400 uppercase tracking-wider block">
-                  Security PIN
+                  2. Security PIN
                 </span>
 
                 {/* Masked PIN Discrete Dots */}
@@ -310,15 +347,18 @@ export function LoginOverlay() {
                   {pinInput ? (
                     <div className="flex items-center gap-2">
                       {Array.from({ length: pinInput.length }).map((_, i) => (
-                        <span key={i} className="inline-block w-2.5 h-2.5 rounded-full bg-stone-900" />
+                        <span key={i} className="inline-block w-2.5 h-2.5 rounded-full bg-stone-900 animate-in zoom-in-50 duration-100" />
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs text-stone-400 font-mono">Enter PIN Code</span>
+                    <span className="text-xs text-stone-400 font-mono text-center truncate px-2">
+                      {selectedUser ? `Enter ${selectedUser.fullName.split(' ')[0]}'s PIN` : 'Select a profile first'}
+                    </span>
                   )}
 
                   {pinInput && (
                     <button
+                      type="button"
                       onClick={handleClear}
                       className="absolute right-2 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 hover:text-stone-900 cursor-pointer"
                     >
@@ -328,13 +368,13 @@ export function LoginOverlay() {
                 </div>
 
                 {/* Numeric Keypad */}
-                <div className="grid grid-cols-3 gap-1">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-1">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                     <button
                       key={digit}
                       type="button"
                       onClick={() => handleDigit(digit)}
-                      className="h-9 bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 rounded-md text-xs font-mono font-medium text-stone-900 transition cursor-pointer"
+                      className="h-10 sm:h-9 bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 rounded-lg text-sm sm:text-xs font-mono font-medium text-stone-900 transition cursor-pointer flex items-center justify-center touch-manipulation"
                     >
                       {digit}
                     </button>
@@ -343,7 +383,7 @@ export function LoginOverlay() {
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="h-9 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-md text-[11px] font-mono text-stone-600 transition cursor-pointer"
+                    className="h-10 sm:h-9 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg text-xs font-mono text-stone-600 transition cursor-pointer flex items-center justify-center touch-manipulation"
                   >
                     C
                   </button>
@@ -351,7 +391,7 @@ export function LoginOverlay() {
                   <button
                     type="button"
                     onClick={() => handleDigit('0')}
-                    className="h-9 bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 rounded-md text-xs font-mono font-medium text-stone-900 transition cursor-pointer"
+                    className="h-10 sm:h-9 bg-stone-50 hover:bg-stone-100 active:bg-stone-200 border border-stone-200 rounded-lg text-sm sm:text-xs font-mono font-medium text-stone-900 transition cursor-pointer flex items-center justify-center touch-manipulation"
                   >
                     0
                   </button>
@@ -359,9 +399,9 @@ export function LoginOverlay() {
                   <button
                     type="button"
                     onClick={handleBackspace}
-                    className="h-9 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-md flex items-center justify-center text-stone-600 transition cursor-pointer"
+                    className="h-10 sm:h-9 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg flex items-center justify-center text-stone-600 transition cursor-pointer touch-manipulation"
                   >
-                    <Delete size={14} />
+                    <Delete size={15} />
                   </button>
                 </div>
               </div>
@@ -369,10 +409,10 @@ export function LoginOverlay() {
           </div>
 
           {/* Bottom Actions & Error */}
-          <div className="pt-4 border-t border-stone-200 space-y-2 mt-2">
+          <div className="pt-3 sm:pt-4 border-t border-stone-200 space-y-2 mt-3">
             {errorMessage && (
-              <div className="p-2 bg-stone-50 border border-stone-300 rounded-md text-[11px] text-stone-900 flex items-center gap-2">
-                <AlertCircle size={13} className="shrink-0 text-stone-700" />
+              <div className="p-2 bg-rose-50 border border-rose-200 rounded-md text-[11px] text-rose-800 flex items-center gap-2">
+                <AlertCircle size={13} className="shrink-0 text-rose-600" />
                 <span className="truncate flex-1">{errorMessage}</span>
               </div>
             )}
@@ -381,7 +421,7 @@ export function LoginOverlay() {
               type="button"
               onClick={() => handleLoginSubmit()}
               disabled={submitting || !selectedUser || !pinInput}
-              className="w-full h-10 bg-stone-900 text-stone-50 rounded-lg font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-stone-800 active:scale-[0.99] transition disabled:opacity-40 cursor-pointer"
+              className="w-full h-11 bg-stone-900 text-stone-50 rounded-xl font-medium text-xs sm:text-sm flex items-center justify-center gap-1.5 hover:bg-stone-800 active:scale-[0.99] transition disabled:opacity-40 cursor-pointer shadow-xs"
             >
               {submitting ? (
                 <>

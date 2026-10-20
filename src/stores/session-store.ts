@@ -54,27 +54,10 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
-      isLoggedIn: true, // Default to true or active session
-      isStationLocked: false,
-      user: {
-        id: 'USR-STAFF',
-        username: 'staff',
-        fullName: 'Billing Staff Sarah',
-        role: 'STAFF',
-        roleBadge: 'Staff / Cashier',
-        initials: 'SS',
-        pinCode: '0000',
-        storeId: 'STORE-MAIN',
-        storeName: 'EyeNova Optical - 02 Mall, Al Kheesa',
-      },
-      store: {
-        id: 'STORE-MAIN',
-        name: 'EyeNova Optical - 02 Mall, Al Kheesa',
-        code: '02MALL',
-        address: '02 Mall, 79 Street 773, Al Kheesa',
-        phone: '+974 4455 0202',
-        isActive: true,
-      },
+      isLoggedIn: false,
+      isStationLocked: true,
+      user: null,
+      store: null,
       shift: null,
       isSidebarCollapsed: false,
       isMobileMenuOpen: false,
@@ -137,16 +120,34 @@ export const useSessionStore = create<SessionState>()(
     }),
     {
       name: 'eyenova-session-storage',
-      version: 2,
+      version: 3,
       migrate: (persistedState: any) => {
-        if (persistedState && persistedState.shift) {
-          if (persistedState.shift.id === 'SHIFT-AUTO' || persistedState.shift.openingCash === 500) {
-            persistedState.shift = null;
+        if (persistedState) {
+          if (
+            persistedState.user?.id === 'USR-STAFF' ||
+            persistedState.user?.username === 'staff' ||
+            persistedState.user?.fullName?.includes('Sarah')
+          ) {
+            persistedState.user = null;
+            persistedState.isLoggedIn = false;
+            persistedState.isStationLocked = true;
+          }
+          if (persistedState.shift) {
+            if (persistedState.shift.id === 'SHIFT-AUTO' || persistedState.shift.openingCash === 500) {
+              persistedState.shift = null;
+            }
           }
         }
         return persistedState;
       },
       onRehydrateStorage: () => (state) => {
+        if (
+          state?.user?.id === 'USR-STAFF' ||
+          state?.user?.username === 'staff' ||
+          state?.user?.fullName?.includes('Sarah')
+        ) {
+          state.logout();
+        }
         if (state?.shift && (state.shift.id === 'SHIFT-AUTO' || state.shift.openingCash === 500)) {
           state.setShift(null);
         }

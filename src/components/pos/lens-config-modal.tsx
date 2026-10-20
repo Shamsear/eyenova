@@ -11,6 +11,8 @@ import {
   STANDARD_ADDS,
 } from '@/lib/utils';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
+import { motion } from 'motion/react';
+import { AnimatedCount, AnimatedQar } from '@/components/shared/animated-number';
 
 export function LensConfigModal() {
   const { isLensConfigModalOpen, selectedProductForConfig, setLensConfigModalOpen, addLine, showToast } =
@@ -440,8 +442,13 @@ export function LensConfigModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
         {/* Header */}
         <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -452,7 +459,7 @@ export function LensConfigModal() {
               <h2 className="font-bold text-sm leading-tight flex items-center gap-1.5">
                 {selectedProductForConfig.titleEn}
                 <span className="text-[10px] font-normal text-blue-300">
-                  {formatQar(selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar)} / box
+                  <AnimatedQar value={selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar} /> / box
                 </span>
               </h2>
               <span className="text-[11px] text-slate-400">Configure Contact Lens Dual-Eye Prescription (OD / OS)</span>
@@ -722,14 +729,18 @@ export function LensConfigModal() {
           <div className="text-xs text-slate-600">
             Total Boxes:{' '}
             <span className="font-bold text-slate-900">
-              {(mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes)}
+              <AnimatedCount
+                value={mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes}
+              />
             </span>{' '}
             • Est.{' '}
             <span className="font-bold text-blue-600">
-              {formatQar(
-                (selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar) *
+              <AnimatedQar
+                value={
+                  (selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar) *
                   (mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes)
-              )}
+                }
+              />
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -747,7 +758,7 @@ export function LensConfigModal() {
             </button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

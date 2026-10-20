@@ -6,6 +6,8 @@ import { formatQar } from '@/lib/utils';
 import { downloadReceiptPdf, downloadA4InvoicePdf } from '@/lib/receipt-pdf';
 import { Printer, Download, FileText, CheckCircle2, X } from 'lucide-react';
 
+import { motion } from 'motion/react';
+
 export function ReceiptModal() {
   const { isReceiptModalOpen, completedReceipt, setReceiptModalOpen } = usePosStore();
 
@@ -24,8 +26,13 @@ export function ReceiptModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] shadow-xl">
+    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+      >
         {/* Header (Swiss Light Style) */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -178,7 +185,7 @@ export function ReceiptModal() {
             <Printer size={13} /> Print (Ctrl+P)
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -160,7 +160,7 @@ export function LoginOverlay() {
 
   return (
     <div className="fixed inset-0 z-50 bg-stone-100/95 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
-      <div className="bg-white rounded-2xl border border-stone-200 w-full max-w-3xl overflow-hidden flex flex-col md:flex-row shadow-lg my-auto max-h-[96dvh] md:max-h-none overflow-y-auto md:overflow-visible">
+      <div className="bg-white rounded-2xl border border-stone-200 w-full max-w-3xl overflow-hidden flex flex-col md:flex-row shadow-lg my-auto max-h-[96vh] max-h-[96dvh] md:max-h-none overflow-y-auto md:overflow-visible">
         {/* Mobile Header Banner (< md) */}
         <div className="md:hidden bg-stone-50 px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">

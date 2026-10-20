@@ -15,14 +15,23 @@
   --primary-foreground: #fafaf9;
 }
 
+html {
+  height: 100%;
+  height: -webkit-fill-available;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html, body {
   height: 100%;
+  height: -webkit-fill-available;
   max-height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
   background-color: var(--background);
   color: var(--foreground);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -30,6 +39,51 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  /* Safe area handling for iPad Pro and notched devices */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Fast touch responsiveness on iPad & eliminate 300ms delay */
+button,
+input,
+select,
+textarea,
+a,
+[role="button"],
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Smooth momentum scrolling for older iOS Safari (iOS 12 - 15) */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto,
+[class*="overflow-y-"],
+[class*="overflow-x-"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fallback for backdrop-blur on older iPad Safari versions */
+@supports not (backdrop-filter: blur(1px)) {
+  .backdrop-blur-xs,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur {
+    background-color: rgba(0, 0, 0, 0.6) !important;
+  }
+}
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .backdrop-blur-xs {
+    -webkit-backdrop-filter: blur(4px);
+  }
+  .backdrop-blur-sm {
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .backdrop-blur-md,
+  .backdrop-blur {
+    -webkit-backdrop-filter: blur(12px);
+  }
 }
 
 code, kbd, samp, pre, .font-mono {

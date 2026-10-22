@@ -238,6 +238,10 @@ export default function OnlineStockPage() {
     setStatusMessage('Syncing to Shopify...');
 
     try {
+      const activeSpheres = ALL_SPHERES.filter((p) => !oosPowers.has(p));
+      const hasPlano = !oosPowers.has('0.00');
+      const hasRx = activeSpheres.some((p) => p !== '0.00');
+
       const res = await fetch('/api/products/online-availability', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -247,6 +251,9 @@ export default function OnlineStockPage() {
           oosCyls: Array.from(oosCyls),
           oosAxes: Array.from(oosAxes),
           oosAdds: Array.from(oosAdds),
+          availablePowers: activeSpheres,
+          hasPlanoOption: hasPlano,
+          hasPrescription: hasRx,
         }),
       });
 

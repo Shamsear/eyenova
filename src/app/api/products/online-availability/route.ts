@@ -3,6 +3,18 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+const ALL_SPHERES = [
+  '0.00', '-0.25', '-0.50', '-0.75', '-1.00', '-1.25', '-1.50', '-1.75', '-2.00',
+  '-2.25', '-2.50', '-2.75', '-3.00', '-3.25', '-3.50', '-3.75', '-4.00', '-4.25',
+  '-4.50', '-4.75', '-5.00', '-5.25', '-5.50', '-5.75', '-6.00', '-6.50', '-7.00',
+  '-7.50', '-8.00', '-8.50', '-9.00', '-9.50', '-10.00', '-10.50', '-11.00', '-11.50',
+  '-12.00', '+0.25', '+0.50', '+0.75', '+1.00', '+1.25', '+1.50', '+1.75', '+2.00',
+  '+2.25', '+2.50', '+2.75', '+3.00', '+3.50', '+4.00', '+4.50', '+5.00', '+5.50',
+  '+6.00', '+7.00', '+8.00'
+];
+
+
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -38,6 +50,15 @@ export async function GET(req: NextRequest) {
           vals.forEach((v) => oosAdds.push(v.trim()));
         }
       });
+
+      // Also ensure any sphere not in availablePowers is marked OOS
+      if (Array.isArray(product.availablePowers) && product.availablePowers.length > 0) {
+        ALL_SPHERES.forEach((sph) => {
+          if (!product.availablePowers.includes(sph) && !oosPowers.includes(sph)) {
+            oosPowers.push(sph);
+          }
+        });
+      }
 
       return NextResponse.json({
         product: {
@@ -131,10 +152,23 @@ export async function POST(req: NextRequest) {
       cleanTags.push(`oos_add: ${oosAdds.join(', ')}`);
     }
 
-    // Update in Database
+    // Calculate active available powers
+    const activeSpheres = Array.isArray(body.availablePowers) && body.availablePowers.length > 0
+      ? body.availablePowers
+      : ALL_SPHERES.filter((p: string) => !oosPowers.includes(p));
+
+    const hasPlano = !oosPowers.includes('0.00');
+    const hasRx = activeSpheres.some((p: string) => p !== '0.00');
+
+    // Update in Database: both tags AND availablePowers in Supabase!
     await prisma.product.update({
       where: { id: productId },
-      data: { tags: cleanTags },
+      data: {
+        tags: cleanTags,
+        availablePowers: activeSpheres,
+        hasPlanoOption: hasPlano,
+        hasPrescription: hasRx,
+      },
     });
 
     let shopifySynced = false;
@@ -194,6 +228,20 @@ export async function POST(req: NextRequest) {
                 key: 'out_of_stock_add_powers',
                 value: formatMetafield(oosAdds),
                 type: 'single_line_text_field',
+              },
+              {
+                ownerId: gid,
+                namespace: 'custom',
+                key: 'has_plano_option',
+                value: hasPlano ? 'true' : 'false',
+                type: 'boolean',
+              },
+              {
+                ownerId: gid,
+                namespace: 'custom',
+                key: 'has_prescription',
+                value: hasRx ? 'true' : 'false',
+                type: 'boolean',
               },
             ];
 

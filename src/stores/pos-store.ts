@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CartLineItem, HeldSaleItem, ProductItem, ReceiptPayload } from '@/lib/types';
-import { isOpticalProduct, formatOpticalSpecs } from '@/lib/utils';
+import { isOpticalProduct, formatOpticalSpecs, getEffectivePriceForPower } from '@/lib/utils';
 
 interface PosState {
   // Cart items
@@ -331,7 +331,16 @@ export const usePosStore = create<PosState>()(
             titleEn: product.titleEn,
             titleAr: product.titleAr,
             brandName: product.brandName,
-            unitPrice: price,
+            unitPrice: config?.unitPrice !== undefined
+              ? config.unitPrice
+              : isOptical
+              ? getEffectivePriceForPower(
+                  product,
+                  normTargetPower,
+                  targetCyl,
+                  targetAdd
+                )
+              : price,
             lensPrice: 0,
             quantity: config?.quantity || 1,
             eye: targetEye,
@@ -346,6 +355,8 @@ export const usePosStore = create<PosState>()(
             productType: product.productType,
             availablePowers: product.availablePowers || [],
             hasPlanoOption: product.hasPlanoOption,
+            basePriceQar: product.salePriceQar ?? product.basePriceQar,
+            powerPriceTiers: product.powerPriceTiers,
             batches: inStockBatches,
           };
 
@@ -435,9 +446,18 @@ export const usePosStore = create<PosState>()(
         }
 
         const newLineId = `line_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const newPrice = (targetLine.powerPriceTiers && targetLine.powerPriceTiers.length > 0)
+          ? getEffectivePriceForPower(
+              { ...targetLine, id: targetLine.productId, basePriceQar: targetLine.basePriceQar ?? targetLine.unitPrice } as any,
+              chosenPlano ? '0.00' : chosenPower,
+              targetLine.cylinder,
+              targetLine.addPower
+            )
+          : targetLine.unitPrice;
         const newLine: CartLineItem = {
           ...targetLine,
           lineId: newLineId,
+          unitPrice: newPrice,
           quantity: 1,
           eye: newEye,
           power: chosenPower,
@@ -546,6 +566,21 @@ export const usePosStore = create<PosState>()(
           }
           if (partialSpecs.isPlano === true) {
             updated.power = '0.00';
+          }
+
+          if (updated.powerPriceTiers && updated.powerPriceTiers.length > 0) {
+            updated.unitPrice = getEffectivePriceForPower(
+              {
+                ...updated,
+                id: updated.productId,
+                basePriceQar: updated.basePriceQar ?? updated.unitPrice,
+                salePriceQar: updated.basePriceQar ?? updated.unitPrice,
+                powerPriceTiers: updated.powerPriceTiers,
+              } as any,
+              updated.isPlano ? '0.00' : updated.power,
+              updated.cylinder,
+              updated.addPower
+            );
           }
 
           updated.lensSummary = formatOpticalSpecs({

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { formatQar, formatQatarDate } from '@/lib/utils';
-import { ProductItem } from '@/lib/types';
+import { ProductItem, PowerPriceTier } from '@/lib/types';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { StatusIndicator, StatusVariant } from '@/components/shared/status-indicator';
@@ -24,6 +24,8 @@ import {
   Loader2,
   Package,
   AlertCircle,
+  DollarSign,
+  Sparkles,
 } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
 
@@ -72,7 +74,15 @@ export default function ProductsPage() {
 
   // Inspector / Editor Modal State
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
-  const [modalTab, setModalTab] = useState<'EDIT' | 'BATCHES' | 'VIEW'>('EDIT');
+  const [modalTab, setModalTab] = useState<'EDIT' | 'BATCHES' | 'TIERS' | 'VIEW'>('EDIT');
+  const [editTiers, setEditTiers] = useState<PowerPriceTier[]>([]);
+  const [tierName, setTierName] = useState('');
+  const [tierMin, setTierMin] = useState('');
+  const [tierMax, setTierMax] = useState('');
+  const [tierPrice, setTierPrice] = useState('');
+  const [tierRequiresCyl, setTierRequiresCyl] = useState(false);
+  const [tierRequiresAdd, setTierRequiresAdd] = useState(false);
+  const [isSavingTiers, setIsSavingTiers] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState('');
 
@@ -116,7 +126,7 @@ export default function ProductsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
 
-  const openProductModal = (p: ProductItem, tab: 'EDIT' | 'BATCHES' | 'VIEW' = 'EDIT') => {
+  const openProductModal = (p: ProductItem, tab: 'EDIT' | 'BATCHES' | 'TIERS' | 'VIEW' = 'EDIT') => {
     setEditingProduct(p);
     setModalTab(tab);
     setEditTitleEn(p.titleEn || '');
@@ -136,6 +146,165 @@ export default function ProductsPage() {
     setEditReplacementSchedule(p.replacementSchedule || '');
     setEditError('');
     setBatchError('');
+    const initialTiers: PowerPriceTier[] = Array.isArray(p.powerPriceTiers)
+      ? p.powerPriceTiers
+      : typeof p.powerPriceTiers === 'string'
+      ? JSON.parse(p.powerPriceTiers)
+      : [];
+    setEditTiers(initialTiers);
+    setTierName('');
+    setTierMin('');
+    setTierMax('');
+    setTierPrice('');
+    setTierRequiresCyl(false);
+    setTierRequiresAdd(false);
+  };
+
+  const handleAddTier = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!tierName.trim()) {
+      showToast('Validation Error', 'Please enter a name for this pricing tier.', false);
+      return;
+    }
+    const priceNum = parseFloat(tierPrice);
+    if (isNaN(priceNum) || priceNum < 0) {
+      showToast('Validation Error', 'Please enter a valid retail price in QAR.', false);
+      return;
+    }
+
+    const minNum = tierMin.trim() !== '' ? parseFloat(tierMin) : null;
+    const maxNum = tierMax.trim() !== '' ? parseFloat(tierMax) : null;
+
+    const newTier: PowerPriceTier = {
+      id: `tier_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: tierName.trim(),
+      minPower: minNum !== null && !isNaN(minNum) ? minNum : null,
+      maxPower: maxNum !== null && !isNaN(maxNum) ? maxNum : null,
+      priceQar: priceNum,
+      requiresCylinder: tierRequiresCyl,
+      requiresAdd: tierRequiresAdd,
+    };
+
+    setEditTiers((prev) => [...prev, newTier]);
+    setTierName('');
+    setTierMin('');
+    setTierMax('');
+    setTierPrice('');
+    setTierRequiresCyl(false);
+    setTierRequiresAdd(false);
+  };
+
+  const handleRemoveTier = (id: string) => {
+    setEditTiers((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleUpdateTierPrice = (id: string, price: number) => {
+    setEditTiers((prev) => prev.map((t) => (t.id === id ? { ...t, priceQar: price } : t)));
+  };
+
+  const handleApplyPreset = (presetType: 'PLANO_VS_RX' | 'THREE_TIER' | 'TORIC') => {
+    if (!editingProduct) return;
+    const base = Number(editingProduct.salePriceQar ?? editingProduct.basePriceQar ?? 100);
+
+    if (presetType === 'PLANO_VS_RX') {
+      setEditTiers([
+        {
+          id: `tier_plano_${Date.now()}`,
+          name: 'Plano (0.00 / No Power)',
+          minPower: 0,
+          maxPower: 0,
+          priceQar: base,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+        {
+          id: `tier_rx_${Date.now()}`,
+          name: 'Prescription (-0.50 to -12.00)',
+          minPower: -12.00,
+          maxPower: -0.50,
+          priceQar: base + 20,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+      ]);
+    } else if (presetType === 'THREE_TIER') {
+      setEditTiers([
+        {
+          id: `tier_plano_${Date.now()}`,
+          name: 'Plano (0.00)',
+          minPower: 0,
+          maxPower: 0,
+          priceQar: base,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+        {
+          id: `tier_std_${Date.now()}`,
+          name: 'Standard RX (-0.50 to -6.00)',
+          minPower: -6.00,
+          maxPower: -0.50,
+          priceQar: base + 20,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+        {
+          id: `tier_high_${Date.now()}`,
+          name: 'High Power (-6.25 to -12.00)',
+          minPower: -12.00,
+          maxPower: -6.25,
+          priceQar: base + 50,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+      ]);
+    } else if (presetType === 'TORIC') {
+      setEditTiers([
+        {
+          id: `tier_sphere_${Date.now()}`,
+          name: 'Spherical Lenses',
+          minPower: -12.00,
+          maxPower: 0,
+          priceQar: base,
+          requiresCylinder: false,
+          requiresAdd: false,
+        },
+        {
+          id: `tier_toric_${Date.now()}`,
+          name: 'Toric / Astigmatism (with Cylinder)',
+          priceQar: base + 50,
+          requiresCylinder: true,
+          requiresAdd: false,
+        },
+      ]);
+    }
+  };
+
+  const handleSaveTiers = async () => {
+    if (!editingProduct) return;
+    setIsSavingTiers(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingProduct.id,
+          powerPriceTiers: editTiers,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const updated = { ...editingProduct, powerPriceTiers: editTiers };
+        setEditingProduct(updated);
+        setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated : p)));
+        showToast('Pricing Tiers Saved', `Saved ${editTiers.length} tier(s) for ${editingProduct.titleEn}`, true);
+      } else {
+        showToast('Save Failed', data.error || 'Failed to save pricing tiers', false);
+      }
+    } catch (err: any) {
+      showToast('Save Error', err.message || 'Network error saving tiers', false);
+    } finally {
+      setIsSavingTiers(false);
+    }
   };
 
   const handleImageUpload = (productId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -580,11 +749,26 @@ export default function ProductsPage() {
       key: 'salePriceQar',
       header: 'Retail Price',
       align: 'right',
-      render: (p) => (
-        <span className="font-mono font-medium text-stone-900 tabular-nums truncate block">
-          {formatQar(p.salePriceQar ?? p.basePriceQar)}
-        </span>
-      ),
+      render: (p) => {
+        const tiers = Array.isArray(p.powerPriceTiers)
+          ? p.powerPriceTiers
+          : typeof p.powerPriceTiers === 'string'
+          ? (JSON.parse(p.powerPriceTiers || '[]') as any[])
+          : [];
+        const count = tiers.length;
+        return (
+          <div className="flex flex-col items-end">
+            <span className="font-mono font-medium text-stone-900 tabular-nums truncate block">
+              {formatQar(p.salePriceQar ?? p.basePriceQar)}
+            </span>
+            {count > 0 && (
+              <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.2 rounded border border-purple-200 mt-0.5">
+                {count} {count === 1 ? 'Tier' : 'Tiers'}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'stockQuantity',
@@ -783,6 +967,18 @@ export default function ProductsPage() {
                     >
                       <Layers size={11} />
                       <span>Batches ({editingProduct.batches?.length || 0})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalTab('TIERS')}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
+                        modalTab === 'TIERS'
+                          ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <DollarSign size={11} />
+                      <span>Power Pricing ({editTiers.length})</span>
                     </button>
                     <button
                       type="button"
@@ -1136,6 +1332,249 @@ export default function ProductsPage() {
                           No distinct lot batches recorded. Add a batch above to track separate diopters.
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB: POWER PRICING TIERS */}
+                {modalTab === 'TIERS' && (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-xs text-purple-950 flex items-center gap-1.5">
+                          <DollarSign size={14} className="text-purple-600" />
+                          Power & Prescription Price Tiers
+                        </h4>
+                        <p className="text-[11px] text-purple-700 mt-0.5">
+                          Set custom retail prices for Plano (0.00), standard powers, high powers, or toric lenses. POS and online cart auto-select the right price.
+                        </p>
+                      </div>
+
+                      {/* Quick Presets */}
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                        <span className="text-[10px] font-semibold text-purple-900">Presets:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset('PLANO_VS_RX')}
+                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                        >
+                          <Sparkles size={10} className="text-purple-600" /> Plano vs RX (+20)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset('THREE_TIER')}
+                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                        >
+                          3-Tier (Plano/Std/High)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApplyPreset('TORIC')}
+                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                        >
+                          Toric / Astigmatism
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Active Tiers List */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-stone-800">
+                          Configured Tiers ({editTiers.length})
+                        </span>
+                        {editTiers.length === 0 && (
+                          <span className="text-[11px] text-stone-500 italic">
+                            No tiers active — product sells at flat base price ({formatQar(editingProduct.salePriceQar ?? editingProduct.basePriceQar)}).
+                          </span>
+                        )}
+                      </div>
+
+                      {editTiers.length > 0 && (
+                        <div className="border border-stone-200 rounded-lg overflow-hidden bg-white shadow-2xs divide-y divide-stone-100">
+                          <div className="grid grid-cols-12 gap-2 p-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
+                            <div className="col-span-4">Tier Name</div>
+                            <div className="col-span-3">Power Range / Condition</div>
+                            <div className="col-span-3 text-right">Retail Price (QAR)</div>
+                            <div className="col-span-2 text-center">Action</div>
+                          </div>
+
+                          {editTiers.map((tier) => (
+                            <div key={tier.id} className="grid grid-cols-12 gap-2 p-2.5 items-center text-xs hover:bg-stone-50/50 transition">
+                              <div className="col-span-4 font-medium text-stone-900 truncate flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" />
+                                <span className="truncate">{tier.name}</span>
+                              </div>
+
+                              <div className="col-span-3 font-mono text-[11px] text-stone-600">
+                                {tier.requiresCylinder ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                    Toric (Cyl)
+                                  </span>
+                                ) : tier.requiresAdd ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                                    Multifocal (Add)
+                                  </span>
+                                ) : (tier.minPower === 0 && tier.maxPower === 0) || tier.name.toLowerCase().includes('plano') ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                    Plano 0.00
+                                  </span>
+                                ) : tier.minPower !== null && tier.minPower !== undefined && tier.maxPower !== null && tier.maxPower !== undefined ? (
+                                  <span>{tier.minPower > 0 ? `+${tier.minPower}` : tier.minPower} to {tier.maxPower > 0 ? `+${tier.maxPower}` : tier.maxPower}</span>
+                                ) : (
+                                  <span className="text-stone-400 italic">All powers</span>
+                                )}
+                              </div>
+
+                              <div className="col-span-3 flex justify-end items-center gap-1 font-mono">
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={tier.priceQar}
+                                  onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
+                                  className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
+                                />
+                                <span className="text-[10px] text-stone-500">QAR</span>
+                              </div>
+
+                              <div className="col-span-2 flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTier(tier.id)}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
+                                  title="Remove Tier"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add Custom Tier Form */}
+                    <form onSubmit={handleAddTier} className="p-3 bg-stone-50 rounded-lg border border-stone-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                          <Plus size={13} className="text-stone-600" /> Add Custom Tier Rule
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-stone-600 mb-0.5">Tier Name *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Standard RX"
+                            value={tierName}
+                            onChange={(e) => setTierName(e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs focus:outline-hidden focus:border-purple-600"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-stone-600 mb-0.5">Power From (Min)</label>
+                          <input
+                            type="number"
+                            step="0.25"
+                            placeholder="e.g. -12.00"
+                            value={tierMin}
+                            onChange={(e) => setTierMin(e.target.value)}
+                            disabled={tierRequiresCyl || tierRequiresAdd}
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-mono focus:outline-hidden focus:border-purple-600 disabled:opacity-40"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-stone-600 mb-0.5">Power To (Max)</label>
+                          <input
+                            type="number"
+                            step="0.25"
+                            placeholder="e.g. -0.50"
+                            value={tierMax}
+                            onChange={(e) => setTierMax(e.target.value)}
+                            disabled={tierRequiresCyl || tierRequiresAdd}
+                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-mono focus:outline-hidden focus:border-purple-600 disabled:opacity-40"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-stone-600 mb-0.5">Retail Price (QAR) *</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              placeholder="180"
+                              value={tierPrice}
+                              onChange={(e) => setTierPrice(e.target.value)}
+                              className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-bold font-mono focus:outline-hidden focus:border-purple-600"
+                            />
+                            <span className="absolute right-2 top-1.5 text-[10px] text-stone-400 font-mono">QAR</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-4 text-xs">
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none text-stone-700">
+                            <input
+                              type="checkbox"
+                              checked={tierRequiresCyl}
+                              onChange={(e) => {
+                                setTierRequiresCyl(e.target.checked);
+                                if (e.target.checked) setTierRequiresAdd(false);
+                              }}
+                              className="rounded border-stone-300 text-purple-600"
+                            />
+                            <span className="text-[11px]">Requires Cylinder (Toric)</span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none text-stone-700">
+                            <input
+                              type="checkbox"
+                              checked={tierRequiresAdd}
+                              onChange={(e) => {
+                                setTierRequiresAdd(e.target.checked);
+                                if (e.target.checked) setTierRequiresCyl(false);
+                              }}
+                              className="rounded border-stone-300 text-purple-600"
+                            />
+                            <span className="text-[11px]">Requires Add (Multifocal)</span>
+                          </label>
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 bg-stone-900 text-white rounded-md text-xs font-medium hover:bg-stone-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                        >
+                          <Plus size={12} /> Add Tier
+                        </button>
+                      </div>
+                    </form>
+
+                    {/* Save Button */}
+                    <div className="pt-2 flex justify-end items-center gap-2 border-t border-stone-200">
+                      <button
+                        type="button"
+                        onClick={handleSaveTiers}
+                        disabled={isSavingTiers}
+                        className="px-4 py-2 bg-purple-700 text-white rounded-lg text-xs font-bold hover:bg-purple-800 transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                      >
+                        {isSavingTiers ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Saving Changes...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save size={13} />
+                            <span>Save Pricing Tiers</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}

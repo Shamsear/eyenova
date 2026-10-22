@@ -1,3 +1,14 @@
+export interface PowerPriceTier {
+  id: string;
+  name: string;
+  minPower?: number | null;
+  maxPower?: number | null;
+  requiresCylinder?: boolean;
+  requiresAdd?: boolean;
+  priceQar: number;
+  costPriceQar?: number | null;
+}
+
 export interface ProductItem {
   id: string;
   sku: string;
@@ -19,6 +30,7 @@ export interface ProductItem {
   hasPrescription: boolean;
   hasPlanoOption: boolean;
   availablePowers: string[];
+  powerPriceTiers?: PowerPriceTier[];
   imageUrl: string | null;
   power?: string | null;
   cylinder?: string | null;
@@ -65,6 +77,8 @@ export interface CartLineItem {
   productType?: string;
   availablePowers?: string[];
   hasPlanoOption?: boolean;
+  basePriceQar?: number;
+  powerPriceTiers?: PowerPriceTier[];
   batches?: {
     id: string;
     batchNumber: string;

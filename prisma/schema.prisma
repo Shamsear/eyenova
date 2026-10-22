@@ -38,6 +38,7 @@ model Product {
   hasPrescription     Boolean             @default(false)
   hasPlanoOption      Boolean             @default(true)
   availablePowers     String[]
+  powerPriceTiers     Json?               @default("[]")
   isActive            Boolean             @default(true)
   imageUrl            String?
   power               Decimal?            @db.Decimal(6, 2)

@@ -5,6 +5,7 @@ import { usePosStore } from '@/stores/pos-store';
 import { X, Sparkles, Eye, Check } from 'lucide-react';
 import {
   formatQar,
+  getEffectivePriceForPower,
   STANDARD_POWERS,
   STANDARD_CYLINDERS,
   STANDARD_AXES,
@@ -408,6 +409,32 @@ export function LensConfigModal() {
     selectedProductForConfig.titleEn.toLowerCase().includes('multifocal') ||
     selectedProductForConfig.titleEn.toLowerCase().includes('presbyopia');
 
+  const odUnitPrice = useMemo(() => {
+    if (!selectedProductForConfig) return 0;
+    return getEffectivePriceForPower(
+      selectedProductForConfig,
+      odIsPlano ? '0.00' : odPower,
+      odCyl,
+      odAdd
+    );
+  }, [selectedProductForConfig, odIsPlano, odPower, odCyl, odAdd]);
+
+  const osUnitPrice = useMemo(() => {
+    if (!selectedProductForConfig) return 0;
+    return getEffectivePriceForPower(
+      selectedProductForConfig,
+      osIsPlano ? '0.00' : osPower,
+      osCyl,
+      osAdd
+    );
+  }, [selectedProductForConfig, osIsPlano, osPower, osCyl, osAdd]);
+
+  const estTotal = useMemo(() => {
+    if (mode === 'BOTH') return odUnitPrice * odBoxes + osUnitPrice * osBoxes;
+    if (mode === 'OD_ONLY') return odUnitPrice * odBoxes;
+    return osUnitPrice * osBoxes;
+  }, [mode, odUnitPrice, odBoxes, osUnitPrice, osBoxes]);
+
   const handleConfirm = () => {
     if (mode === 'BOTH' || mode === 'OD_ONLY') {
       addLine(selectedProductForConfig, {
@@ -418,6 +445,7 @@ export function LensConfigModal() {
         addPower: odAdd || null,
         isPlano: odIsPlano,
         quantity: odBoxes,
+        unitPrice: odUnitPrice,
       });
     }
 
@@ -430,6 +458,7 @@ export function LensConfigModal() {
         addPower: osAdd || null,
         isPlano: osIsPlano,
         quantity: osBoxes,
+        unitPrice: osUnitPrice,
       });
     }
 
@@ -735,12 +764,7 @@ export function LensConfigModal() {
             </span>{' '}
             • Est.{' '}
             <span className="font-bold text-blue-600">
-              <AnimatedQar
-                value={
-                  (selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar) *
-                  (mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes)
-                }
-              />
+              <AnimatedQar value={estTotal} />
             </span>
           </div>
           <div className="flex items-center gap-2">

@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
           waterContent: true,
           material: true,
           replacementSchedule: true,
+          powerPriceTiers: true,
           batches: {
             where: { quantity: { gt: 0 } },
             select: {
@@ -181,6 +182,7 @@ export async function PATCH(req: NextRequest) {
       material,
       replacementSchedule,
       isActive,
+      powerPriceTiers,
     } = body;
 
     if (!id) {
@@ -206,6 +208,9 @@ export async function PATCH(req: NextRequest) {
     if (material !== undefined) data.material = material ? material.trim() : null;
     if (replacementSchedule !== undefined) data.replacementSchedule = replacementSchedule ? replacementSchedule.trim() : null;
     if (isActive !== undefined) data.isActive = Boolean(isActive);
+    if (powerPriceTiers !== undefined) {
+      data.powerPriceTiers = Array.isArray(powerPriceTiers) ? powerPriceTiers : [];
+    }
 
     const updated = await prisma.product.update({
       where: { id },

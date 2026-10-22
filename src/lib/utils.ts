@@ -1,3 +1,4 @@
+import type { ProductItem, PowerPriceTier } from '@/lib/types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -239,3 +240,85 @@ export function formatOpticalSpecs(specs?: {
 }
 
 
+
+
+/**
+ * Resolves the effective retail price for a given product and power/cylinder/add configuration.
+ * If the product has powerPriceTiers configured, matches against the appropriate tier.
+ * Otherwise falls back to product.salePriceQar ?? product.basePriceQar.
+ */
+export function getEffectivePriceForPower(
+  product: ProductItem,
+  power?: string | null,
+  cylinder?: string | null,
+  addPower?: string | null
+): number {
+  const basePrice = Number(product.salePriceQar ?? product.basePriceQar ?? 0);
+  const rawTiers = (product as any).powerPriceTiers;
+  
+  if (!rawTiers) return basePrice;
+  
+  let tiers: PowerPriceTier[] = [];
+  if (Array.isArray(rawTiers)) {
+    tiers = rawTiers;
+  } else if (typeof rawTiers === 'string') {
+    try { tiers = JSON.parse(rawTiers); } catch { return basePrice; }
+  } else {
+    return basePrice;
+  }
+
+  if (tiers.length === 0) return basePrice;
+
+  const hasCyl = Boolean(cylinder && cylinder.trim() !== '' && cylinder !== '0.00' && cylinder !== '0');
+  const hasAdd = Boolean(addPower && addPower.trim() !== '');
+
+  // 1. Toric check
+  if (hasCyl) {
+    const toricTier = tiers.find((t) => t.requiresCylinder);
+    if (toricTier && typeof toricTier.priceQar === 'number') {
+      return Number(toricTier.priceQar);
+    }
+  }
+
+  // 2. Multifocal check
+  if (hasAdd) {
+    const addTier = tiers.find((t) => t.requiresAdd);
+    if (addTier && typeof addTier.priceQar === 'number') {
+      return Number(addTier.priceQar);
+    }
+  }
+
+  // 3. Plano (0.00 / No Power) check
+  const pStr = (power || '').trim().toLowerCase();
+  const isPlano = !pStr || pStr === '0' || pStr === '0.00' || pStr.includes('plano') || pStr.includes('no power');
+
+  if (isPlano) {
+    const planoTier = tiers.find(
+      (t) =>
+        (t.minPower === 0 && t.maxPower === 0) ||
+        t.name.toLowerCase().includes('plano') ||
+        t.name.toLowerCase().includes('no power')
+    );
+    if (planoTier && typeof planoTier.priceQar === 'number') {
+      return Number(planoTier.priceQar);
+    }
+  } else {
+    // 4. Numeric diopter bracket check
+    const cleanNumStr = pStr.replace(/[^0-9.-]/g, '');
+    const num = parseFloat(cleanNumStr);
+    if (!isNaN(num)) {
+      for (const tier of tiers) {
+        if (tier.requiresCylinder || tier.requiresAdd) continue;
+        if (typeof tier.minPower === 'number' && typeof tier.maxPower === 'number') {
+          const min = Math.min(tier.minPower, tier.maxPower);
+          const max = Math.max(tier.minPower, tier.maxPower);
+          if (num >= min && num <= max) {
+            return Number(tier.priceQar);
+          }
+        }
+      }
+    }
+  }
+
+  return basePrice;
+}

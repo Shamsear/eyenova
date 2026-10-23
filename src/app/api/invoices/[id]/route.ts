@@ -16,6 +16,7 @@ export async function PATCH(
       // Invoice-level fields
       customerName,
       customerPhone,
+      status,
       subtotalQar,
       discountQar,
       taxTotalQar,
@@ -43,6 +44,7 @@ export async function PATCH(
       const invoiceData: Record<string, unknown> = {};
       if (customerName !== undefined) invoiceData.customerName = customerName;
       if (customerPhone !== undefined) invoiceData.customerPhone = customerPhone;
+      if (status !== undefined) invoiceData.status = status;
       if (subtotalQar !== undefined) invoiceData.subtotalQar = subtotalQar;
       if (discountQar !== undefined) invoiceData.discountQar = discountQar;
       if (taxTotalQar !== undefined) invoiceData.taxTotalQar = taxTotalQar;
@@ -61,6 +63,10 @@ export async function PATCH(
         if (customerName !== undefined) orderData.customerName = customerName;
         if (customerPhone !== undefined) orderData.customerPhone = customerPhone;
         if (customerEmail !== undefined) orderData.customerEmail = customerEmail;
+        if (status !== undefined) {
+          orderData.orderStatus = status === 'PAID' ? 'CONFIRMED' : status;
+          orderData.paymentStatus = status === 'PAID' ? 'PAID' : status === 'REFUNDED' ? 'REFUNDED' : 'PENDING';
+        }
         if (paymentMethod !== undefined) orderData.paymentMethod = paymentMethod;
         if (paymentReference !== undefined) orderData.paymentReference = paymentReference || null;
         if (notes !== undefined) orderData.notes = notes || null;

@@ -34,18 +34,25 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
     >
       {/* 1. Store Header (Bilingual, Fetched from Supabase) */}
       <div className="text-center space-y-0.5">
+        <div className="flex justify-center pb-1">
+          <img
+            src="/logo.png"
+            alt="EyeNova Optical"
+            className="h-10 w-auto object-contain"
+          />
+        </div>
         {storeNameAr && <h2 className="font-bold text-[14.5px] text-stone-900 leading-snug">{storeNameAr}</h2>}
         <h3 className="font-bold text-[12.5px] text-stone-900 leading-snug">{storeNameEn}</h3>
         {addressAr && <p className="text-[9.5px] text-stone-600">{addressAr}</p>}
         {addressEn && <p className="text-[9.5px] text-stone-600">{addressEn}</p>}
         
-        {/* Phone number strictly isolated LTR to prevent BiDi inversion */}
+        {/* Phone number strictly pure LTR to prevent BiDi inversion */}
         {phone && (
-          <div className="text-[9.5px] text-stone-600 flex items-center justify-center gap-1" dir="ltr">
-            <span>Tel / هاتف:</span>
-            <span className="tabular-nums font-mono font-medium" dir="ltr">
+          <div className="text-[9.5px] text-stone-600 flex items-center justify-center gap-1 font-mono" dir="ltr">
+            <span>Tel:</span>
+            <bdi className="tabular-nums font-medium" dir="ltr">
               {phone}
-            </span>
+            </bdi>
           </div>
         )}
 
@@ -111,7 +118,7 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
         {data.customerPhone && (
           <div className="flex justify-between" dir="ltr">
             <span className="text-stone-600">الهاتف / Phone:</span>
-            <span className="font-mono text-stone-800" dir="ltr">{data.customerPhone}</span>
+            <span className="font-mono text-stone-800" dir="ltr"><bdi dir="ltr">{data.customerPhone}</bdi></span>
           </div>
         )}
         {data.notes && (

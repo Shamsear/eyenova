@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptPayload } from './types';
+import { LOGO_BASE64 } from './logo-base64';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -43,12 +44,47 @@ function formatPaymentMethod(m: string): string {
   return m;
 }
 
+function loadLogoImage(): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || typeof Image === 'undefined') {
+      return resolve(null);
+    }
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = LOGO_BASE64;
+    if (img.complete) resolve(img);
+  });
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 // ─────────────────────────────────────────────
 // Canvas-based Bilingual 80mm Receipt Generator
-// Produces 100% authentic Arabic/English bill matching EyeNovaBilling ReceiptDocument
 // ─────────────────────────────────────────────
-function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
+async function renderReceiptToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement | null> {
   if (typeof document === 'undefined') return null;
+
+  const logoImg = await loadLogoImage();
 
   const canvas = document.createElement('canvas');
   const W = 580; // High-res width for 80mm roll (~7.25 px/mm)
@@ -58,16 +94,16 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
   // Estimate total height needed
   const itemCount = Math.max(1, data.items.length);
   const estH =
-    290 + // Header & title
+    360 + // Header & logo & title
     120 + // Metadata
-    itemCount * 65 + // Items
+    itemCount * 70 + // Items
     110 + // Totals
     60 + // Payment
     130 + // Footer
     50; // Safety margin
 
   canvas.width = W;
-  canvas.height = Math.max(750, estH);
+  canvas.height = Math.max(850, estH);
 
   // Background
   ctx.fillStyle = '#ffffff';
@@ -76,7 +112,15 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
   const L = 24;
   const R = W - 24; // 556
   const MID = W / 2;
-  let y = 30;
+  let y = 20;
+
+  // Draw Logo if loaded
+  if (logoImg) {
+    const logoW = 140;
+    const logoH = 88;
+    ctx.drawImage(logoImg, MID - logoW / 2, y, logoW, logoH);
+    y += logoH + 12;
+  }
 
   ctx.fillStyle = '#111827';
   ctx.textBaseline = 'top';
@@ -84,7 +128,7 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
   // 1. Store Header (Bilingual)
   ctx.textAlign = 'center';
   ctx.font = 'bold 24px "Segoe UI", Tahoma, Arial, sans-serif';
-  ctx.fillText(data.storeNameAr || 'عين نوفا للبصريات', MID, y);
+  ctx.fillText(data.storeNameAr || 'آي نوفا للتجارة البصرية', MID, y);
   y += 32;
 
   ctx.font = 'bold 20px "Segoe UI", Tahoma, Arial, sans-serif';
@@ -102,7 +146,7 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
     y += 21;
   }
   if (data.phone) {
-    ctx.fillText(`Tel / هاتف: ${data.phone}`, MID, y);
+    ctx.fillText(`Tel: ${data.phone}`, MID, y);
     y += 21;
   }
   const regParts: string[] = [];
@@ -269,7 +313,7 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
   ctx.fillRect(L, y + 3.5, R - L, 1.5);
   y += 14;
 
-  // 7. NET TOTAL (Large Bold font, Wide separation to prevent collisions)
+  // 7. NET TOTAL
   ctx.fillStyle = '#111827';
   ctx.font = 'bold 20px "Segoe UI", Tahoma, Arial, sans-serif';
   ctx.textAlign = 'left';
@@ -363,6 +407,494 @@ function renderReceiptToCanvas(data: ReceiptPayload): HTMLCanvasElement | null {
 }
 
 // ─────────────────────────────────────────────
+// Canvas-based Bilingual Luxury A4 Invoice Generator
+// ─────────────────────────────────────────────
+async function renderA4ToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement | null> {
+  if (typeof document === 'undefined') return null;
+
+  const logoImg = await loadLogoImage();
+
+  const canvas = document.createElement('canvas');
+  // High-resolution A4 at ~150 DPI
+  const W = 1240;
+  const H = 1754;
+  canvas.width = W;
+  canvas.height = H;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  const L = 60;
+  const R = W - 60; // 1180
+  let y = 50;
+
+  // 1. Header Section
+  // Left: Brand Logo + Company Info
+  if (logoImg) {
+    const logoW = 135;
+    const logoH = 85;
+    ctx.drawImage(logoImg, L, y, logoW, logoH);
+  }
+
+  const headerTextX = L + 155;
+  let textY = y + 4;
+
+  ctx.fillStyle = '#0f172a';
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 23px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText(data.storeNameEn || 'EyeNova Optical - 02 Mall, Al Kheesa', headerTextX, textY);
+  textY += 28;
+
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 20px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText(data.storeNameAr || 'آي نوفا للتجارة البصرية', headerTextX, textY);
+  textY += 26;
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '14.5px "Segoe UI", Tahoma, Arial, sans-serif';
+  const addr = [data.addressEn || '02 Mall, 79 Street 773, Al Kheesa', data.addressAr].filter(Boolean).join(' · ');
+  ctx.fillText(addr, headerTextX, textY);
+  textY += 21;
+
+  const metaParts: string[] = [];
+  if (data.phone) metaParts.push(`Tel: ${data.phone}`);
+  if (data.website) metaParts.push(data.website);
+  if (data.crNumber) metaParts.push(`CR / س.ت: ${data.crNumber}`);
+  if (data.vatNumber) metaParts.push(`VAT: ${data.vatNumber}`);
+  ctx.fillText(metaParts.join('  ·  '), headerTextX, textY);
+
+  // Right: Tax Invoice Badge + Meta
+  const badgeW = 240;
+  const badgeH = 34;
+  const badgeX = R - badgeW;
+  const badgeY = y + 2;
+
+  ctx.fillStyle = '#0f172a';
+  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 17);
+  ctx.fill();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 13px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('TAX INVOICE  ·  فاتورة ضريبية', badgeX + badgeW / 2, badgeY + 9);
+
+  let metaY = badgeY + badgeH + 12;
+  const metaItems: [string, string][] = [
+    ['Invoice # / رقم الفاتورة:', data.invoiceNumber],
+    ['Date / التاريخ:', `${data.date}  ${data.time}`],
+  ];
+
+  ctx.font = '14px "Segoe UI", Tahoma, Arial, sans-serif';
+  for (const [lbl, val] of metaItems) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText(lbl, R - 130, metaY);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 14px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(val, R, metaY);
+    ctx.font = '14px "Segoe UI", Tahoma, Arial, sans-serif';
+    metaY += 22;
+  }
+
+  // Status Badge
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('Status / الحالة:', R - 130, metaY);
+
+  const statusBadgeW = 120;
+  const statusBadgeH = 24;
+  const statusBadgeX = R - statusBadgeW;
+  const statusBadgeY = metaY - 3;
+  ctx.fillStyle = '#ecfdf5';
+  roundRect(ctx, statusBadgeX, statusBadgeY, statusBadgeW, statusBadgeH, 12);
+  ctx.fill();
+  ctx.strokeStyle = '#a7f3d0';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#047857';
+  ctx.font = 'bold 12px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('PAID / مدفوعة', statusBadgeX + statusBadgeW / 2, statusBadgeY + 5);
+
+  y = Math.max(textY + 22, metaY + 36);
+
+  // Divider Line
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(L, y);
+  ctx.lineTo(R, y);
+  ctx.stroke();
+  y += 18;
+
+  // 2. Customer & Order Cards
+  const cardW = (R - L - 24) / 2; // ~548
+  const cardH = 152;
+  const card1X = L;
+  const card2X = L + cardW + 24;
+
+  // Card 1: Billed To
+  ctx.fillStyle = '#f8fafc';
+  roundRect(ctx, card1X, y, cardW, cardH, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 13px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('BILLED TO / بيانات العميل', card1X + 16, y + 14);
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(card1X + 16, y + 36);
+  ctx.lineTo(card1X + cardW - 16, y + 36);
+  ctx.stroke();
+
+  let c1RowY = y + 46;
+  const c1Rows: [string, string][] = [
+    ['Name / الاسم:', data.customerName || 'Walk-in Customer'],
+    ['Phone / الهاتف:', data.customerPhone || '—'],
+    ['Email / البريد:', data.customerEmail || '—'],
+    ['Location / الموقع:', 'Doha, Qatar / الدوحة، قطر'],
+  ];
+  for (const [cLbl, cVal] of c1Rows) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(cLbl, card1X + 16, c1RowY);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(cVal, card1X + cardW - 16, c1RowY);
+    c1RowY += 24;
+  }
+
+  // Card 2: Order Details
+  ctx.fillStyle = '#f8fafc';
+  roundRect(ctx, card2X, y, cardW, cardH, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 13px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('ORDER DETAILS / تفاصيل الطلب', card2X + 16, y + 14);
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.beginPath();
+  ctx.moveTo(card2X + 16, y + 36);
+  ctx.lineTo(card2X + cardW - 16, y + 36);
+  ctx.stroke();
+
+  let c2RowY = y + 46;
+  const c2Rows: [string, string][] = [
+    ['Order Ref / رقم الطلب:', data.orderNumber],
+    ['Payment / طريقة الدفع:', formatPaymentMethod(data.paymentMethod)],
+    ['Staff / البائع:', data.cashierName || 'Cashier'],
+    ['Ref / المرجع:', data.paymentReference || '—'],
+  ];
+  for (const [cLbl, cVal] of c2Rows) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(cLbl, card2X + 16, c2RowY);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(cVal, card2X + cardW - 16, c2RowY);
+    c2RowY += 24;
+  }
+
+  y += cardH + 26;
+
+  // 3. Items Table
+  // Header
+  const thH = 38;
+  ctx.fillStyle = '#0f172a';
+  roundRect(ctx, L, y, R - L, thH, 6);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 13px "Segoe UI", Tahoma, Arial, sans-serif';
+
+  // Columns: # (50), Item Specs (570), Qty (110), Rate (190), Total (200)
+  const colNumX = L + 25;
+  const colItemX = L + 60;
+  const colQtyX = L + 650;
+  const colRateX = L + 850;
+  const colTotalX = R - 16;
+
+  ctx.textAlign = 'center';
+  ctx.fillText('#', colNumX, y + 11);
+
+  ctx.textAlign = 'left';
+  ctx.fillText('الصنف والمواصفات / Item & Prescription Specs', colItemX, y + 11);
+
+  ctx.textAlign = 'center';
+  ctx.fillText('الكمية / Qty', colQtyX, y + 11);
+
+  ctx.textAlign = 'right';
+  ctx.fillText('سعر الوحدة / Rate', colRateX, y + 11);
+
+  ctx.textAlign = 'right';
+  ctx.fillText('المجموع / Total', colTotalX, y + 11);
+
+  y += thH + 8;
+
+  // Rows
+  data.items.forEach((it, idx) => {
+    const rowStartY = y;
+    let textInnerY = y + 6;
+
+    // Index
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '14px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText((idx + 1).toString(), colNumX, textInnerY);
+
+    // Item Titles
+    ctx.textAlign = 'left';
+    if (it.nameAr) {
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 15px "Segoe UI", Tahoma, Arial, sans-serif';
+      ctx.fillText(it.nameAr, colItemX, textInnerY);
+      textInnerY += 22;
+    }
+
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 14.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(it.name, colItemX, textInnerY);
+    textInnerY += 20;
+
+    if (it.specs) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '13px "Segoe UI", Tahoma, Arial, sans-serif';
+      ctx.fillText(it.specs, colItemX, textInnerY);
+      textInnerY += 18;
+    }
+
+    // Qty
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 14.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(it.quantity.toString(), colQtyX, rowStartY + 10);
+
+    // Rate
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#334155';
+    ctx.font = '14.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(`${it.unitPrice.toFixed(2)} QAR`, colRateX, rowStartY + 10);
+
+    // Total
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 15px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(`${it.total.toFixed(2)} QAR`, colTotalX, rowStartY + 10);
+
+    y = Math.max(textInnerY + 8, rowStartY + 48);
+
+    // Row divider
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(L, y);
+    ctx.lineTo(R, y);
+    ctx.stroke();
+    y += 8;
+  });
+
+  y += 12;
+
+  // 4. Financial Summary & Totals
+  const totBoxW = 380;
+  const totBoxX = R - totBoxW;
+  const totBoxH = 175;
+
+  // Left side: Notes & Payment Status
+  const leftNotesW = totBoxX - L - 32;
+  let leftY = y;
+
+  if (data.notes) {
+    ctx.fillStyle = '#f8fafc';
+    roundRect(ctx, L, leftY, leftNotesW, 64, 6);
+    ctx.fill();
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 12.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText('Notes / ملاحظات الطلب:', L + 14, leftY + 12);
+    ctx.fillStyle = '#1e293b';
+    ctx.font = '13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(data.notes, L + 14, leftY + 34);
+    leftY += 76;
+  }
+
+  // Payment Badge Box
+  ctx.fillStyle = '#ecfdf5';
+  roundRect(ctx, L, leftY, leftNotesW, 44, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#a7f3d0';
+  ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#047857';
+  ctx.font = '13px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('Payment Status / حالة السداد:', L + 14, leftY + 14);
+
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('PAID IN FULL / مسدد بالكامل', L + leftNotesW - 14, leftY + 14);
+
+  // Right side: Totals Box
+  ctx.fillStyle = '#f8fafc';
+  roundRect(ctx, totBoxX, y, totBoxW, totBoxH, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  let totRowY = y + 16;
+  const totItems: [string, string, boolean, boolean][] = [
+    ['Subtotal / المجموع الفرعي:', `${data.subtotal.toFixed(2)} QAR`, false, false],
+  ];
+  if (data.discount > 0) {
+    totItems.push(['Discount / الخصم:', `-${data.discount.toFixed(2)} QAR`, true, false]);
+  }
+  if (data.deliveryFee > 0) {
+    totItems.push(['Delivery / رسوم التوصيل:', `+${data.deliveryFee.toFixed(2)} QAR`, false, false]);
+  }
+  if (data.taxAmount > 0) {
+    totItems.push(['VAT / ضريبة القيمة المضافة:', `+${data.taxAmount.toFixed(2)} QAR`, false, false]);
+  }
+
+  for (const [tLbl, tVal, isGreen] of totItems) {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = isGreen ? '#047857' : '#475569';
+    ctx.font = '14px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(tLbl, totBoxX + 16, totRowY);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = isGreen ? '#047857' : '#1e293b';
+    ctx.font = 'bold 14px "Segoe UI", Tahoma, Arial, sans-serif';
+    ctx.fillText(tVal, R - 16, totRowY);
+    totRowY += 26;
+  }
+
+  // Divider inside Totals
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(totBoxX + 16, totRowY + 4);
+  ctx.lineTo(R - 16, totRowY + 4);
+  ctx.stroke();
+
+  totRowY += 16;
+
+  // NET TOTAL DUE
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 16px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('TOTAL DUE / الإجمالي:', totBoxX + 16, totRowY + 4);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 22px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText(`${data.total.toFixed(2)} QAR`, R - 16, totRowY + 2);
+
+  // 5. Terms & Signatory Section
+  y = Math.max(y + totBoxH + 40, 1470);
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(L, y);
+  ctx.lineTo(R, y);
+  ctx.stroke();
+  y += 18;
+
+  // Terms on left
+  const termsW = 740;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 13.5px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('Terms & Conditions / الشروط والأحكام:', L, y);
+  y += 22;
+
+  const termsLines = [
+    '1. البضاعة المباعة ترد وتستبدل خلال 14 يوماً من تاريخ الشراء بالفاتورة وبحالتها الأصلية.',
+    '2. Goods may be exchanged or returned within 14 days in original condition with this receipt.',
+    '3. العدسات الطبية المفصلة والخاصة لا ترد ولا تستبدل بعد قصها وتركيبها.',
+    '4. Custom-cut prescription lenses cannot be refunded once processed.',
+  ];
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '12px "Segoe UI", Tahoma, Arial, sans-serif';
+  for (const line of termsLines) {
+    ctx.fillText(line, L, y);
+    y += 19;
+  }
+
+  // Signatory on right
+  const sigX = R - 190;
+  const sigY = y - 35;
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(sigX, sigY);
+  ctx.lineTo(R, sigY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#475569';
+  ctx.font = 'bold 12px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('Authorized Signatory', sigX + 95, sigY + 8);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '11px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText('التوقيع والختم المعتمد', sigX + 95, sigY + 24);
+
+  // 6. Page Footer
+  const footerY = H - 36;
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(L, footerY - 10);
+  ctx.lineTo(R, footerY - 10);
+  ctx.stroke();
+
+  ctx.font = '12px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillStyle = '#94a3b8';
+
+  ctx.textAlign = 'left';
+  ctx.fillText(data.storeNameEn || 'EyeNova Optical - 02 Mall, Al Kheesa', L, footerY);
+
+  ctx.textAlign = 'center';
+  ctx.fillText('Page 1 of 1', W / 2, footerY);
+
+  ctx.textAlign = 'right';
+  ctx.fillText(`Invoice ${data.invoiceNumber}`, R, footerY);
+
+  return canvas;
+}
+
+// ─────────────────────────────────────────────
 // Direct Vector 80mm jsPDF Generator (Fallback)
 // ─────────────────────────────────────────────
 export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
@@ -370,9 +902,9 @@ export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
   const MARGIN = 4;
   const RIGHT = PAGE_W - MARGIN; // 76
 
-  const baseH = 150;
+  const baseH = 160;
   const itemH = Math.max(1, data.items.length) * 13;
-  const totalH = Math.max(180, baseH + itemH);
+  const totalH = Math.max(190, baseH + itemH);
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -380,15 +912,23 @@ export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
     format: [PAGE_W, totalH],
   });
 
-  let y = 8;
+  let y = 6;
+
+  // Add Logo if available
+  try {
+    doc.addImage(LOGO_BASE64, 'PNG', PAGE_W / 2 - 12, y, 24, 15);
+    y += 17;
+  } catch {
+    y += 2;
+  }
 
   // Store Name
   doc.setFont('helvetica', 'bold');
   const storeName = data.storeNameEn || 'EYENOVA OPTICAL';
-  doc.setFontSize(storeName.length > 25 ? 10.5 : 12);
+  doc.setFontSize(storeName.length > 25 ? 10 : 11.5);
   doc.setTextColor(0, 0, 0);
   doc.text(storeName, PAGE_W / 2, y, { align: 'center' });
-  y += 5;
+  y += 4.5;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
@@ -524,7 +1064,7 @@ export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
   drawSolidLine(doc, MARGIN, y + 0.8, RIGHT, 0.35);
   y += 4.5;
 
-  // NET TOTAL - Explicitly positioned at left margin and right margin so they NEVER collide!
+  // NET TOTAL
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.setTextColor(0, 0, 0);
@@ -575,7 +1115,7 @@ export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
 }
 
 // ─────────────────────────────────────────────
-// A4 Formal Tax Invoice
+// Direct Vector A4 Formal Invoice (Fallback)
 // ─────────────────────────────────────────────
 export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
   const doc = new jsPDF({
@@ -591,39 +1131,48 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
   const MID = 105;
   const COL_R = MID + 4;
 
-  let y = 20;
+  let y = 16;
+
+  // Logo top left
+  try {
+    doc.addImage(LOGO_BASE64, 'PNG', MARGIN, y - 2, 26, 16.3);
+  } catch {
+    // fallback if base64 issues
+  }
+
+  const headerLeftX = MARGIN + 29;
 
   // Header: store name left, TAX INVOICE pill right
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setTextColor(15, 23, 42);
-  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', MARGIN, y);
+  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', headerLeftX, y + 4);
 
-  const badgeW = 38;
-  const badgeH = 7;
+  const badgeW = 44;
+  const badgeH = 7.5;
   const badgeX = RIGHT - badgeW;
-  const badgeY = y - 6;
+  const badgeY = y - 1;
   doc.setFillColor(15, 23, 42);
   doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, 'F');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setTextColor(255, 255, 255);
-  doc.text('TAX INVOICE', badgeX + badgeW / 2, badgeY + 4.8, {
+  doc.text('TAX INVOICE', badgeX + badgeW / 2, badgeY + 5.2, {
     align: 'center',
   });
 
-  y += 6;
+  y += 10;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
 
   const addressLine = [
-    data.addressEn || '',
+    data.addressEn || '02 Mall, 79 Street 773, Al Kheesa',
     data.phone ? `Tel: ${data.phone}` : '',
   ]
     .filter(Boolean)
     .join('  ·  ');
-  doc.text(addressLine, MARGIN, y);
+  doc.text(addressLine, headerLeftX, y);
   y += 4.5;
 
   const regLine = [
@@ -633,7 +1182,7 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
     .filter(Boolean)
     .join('  ·  ');
   if (regLine) {
-    doc.text(regLine, MARGIN, y);
+    doc.text(regLine, headerLeftX, y);
   }
 
   // Invoice # and Date
@@ -655,12 +1204,12 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
     align: 'right',
   });
 
-  y += 9;
+  y += 10;
 
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.5);
   doc.line(MARGIN, y, RIGHT, y);
-  y += 8;
+  y += 7;
 
   // Two-column info block
   doc.setFont('helvetica', 'bold');
@@ -826,14 +1375,14 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
 // ─────────────────────────────────────────────
 
 /** Triggers browser download of the 80 mm thermal receipt PDF with full Arabic support. */
-export function downloadReceiptPdf(
+export async function downloadReceiptPdf(
   data: ReceiptPayload,
   filename?: string,
-): void {
-  // If in browser, render to high-DPI canvas to guarantee 100% Arabic font support and zero overlap
+): Promise<void> {
+  // If in browser, render to high-DPI canvas to guarantee 100% Arabic font support, logo and zero overlap
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     try {
-      const canvas = renderReceiptToCanvas(data);
+      const canvas = await renderReceiptToCanvas(data);
       if (canvas) {
         const imgData = canvas.toDataURL('image/png');
         const pdfW = 80;
@@ -858,11 +1407,32 @@ export function downloadReceiptPdf(
   doc.save(filename || `Receipt_${data.invoiceNumber}.pdf`);
 }
 
-/** Triggers browser download of the A4 formal invoice PDF. */
-export function downloadA4InvoicePdf(
+/** Triggers browser download of the A4 formal invoice PDF with full Arabic support and brand logo. */
+export async function downloadA4InvoicePdf(
   data: ReceiptPayload,
   filename?: string,
-): void {
+): Promise<void> {
+  // If in browser, render to high-DPI canvas to guarantee 100% Arabic shaping, executive luxury styling and brand logo
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    try {
+      const canvas = await renderA4ToCanvas(data);
+      if (canvas) {
+        const imgData = canvas.toDataURL('image/png');
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+        });
+        doc.addImage(imgData, 'PNG', 0, 0, 210, 297);
+        doc.save(filename || `Invoice_${data.invoiceNumber}.pdf`);
+        return;
+      }
+    } catch (err) {
+      console.warn('Canvas A4 generation failed, falling back to direct vector:', err);
+    }
+  }
+
+  // Fallback direct vector
   const doc = generateA4InvoicePdf(data);
   doc.save(filename || `Invoice_${data.invoiceNumber}.pdf`);
 }

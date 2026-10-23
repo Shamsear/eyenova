@@ -18,11 +18,14 @@ import {
   Printer,
   Loader2,
   AlertTriangle,
+  Pencil,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 import { ThermalReceiptBill } from '@/components/shared/thermal-receipt-bill';
+import { A4InvoiceBill } from '@/components/shared/a4-invoice-bill';
 import { PrintReceiptArea } from '@/components/shared/print-receipt';
+import { EditInvoiceModal } from '@/components/shared/edit-invoice-modal';
 
 
 interface InvoiceRow {
@@ -86,13 +89,22 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | null>(null);
+  const [billPreviewMode, setBillPreviewMode] = useState<'A4' | '80MM'>('A4');
   const [refunding, setRefunding] = useState(false);
   const [refundModalInvoice, setRefundModalInvoice] = useState<InvoiceRow | null>(null);
   const [refundReason, setRefundReason] = useState('Customer return');
   const [refundError, setRefundError] = useState('');
   const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceRow | null>(null);
 
   const { canRefund, user, store } = useSessionStore();
+
+  const handleEditSuccess = (updatedData: any) => {
+    fetchInvoices();
+    if (selectedInvoice && selectedInvoice.id === updatedData.id) {
+      setSelectedInvoice((prev) => (prev ? { ...prev, ...updatedData } : null));
+    }
+  };
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -272,6 +284,17 @@ export default function InvoicesPage() {
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              setEditingInvoice(row);
+            }}
+            title="Edit invoice"
+            className="p-1 text-stone-500 hover:text-blue-600 rounded hover:bg-stone-100 transition cursor-pointer"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
               downloadReceiptPdf(toReceiptPayload(row));
             }}
             title="Download 80mm receipt PDF"
@@ -363,6 +386,16 @@ export default function InvoicesPage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setEditingInvoice(inv);
+                    }}
+                    className="px-2 py-0.5 rounded border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[10px] cursor-pointer flex items-center gap-1"
+                  >
+                    <Pencil size={10} /> Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       downloadReceiptPdf(toReceiptPayload(inv));
                     }}
                     className="px-2 py-0.5 rounded border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[10px] cursor-pointer"
@@ -387,53 +420,96 @@ export default function InvoicesPage() {
       </div>
 
             {/* Invoice Receipt Bill Modal (Same UI copy as POS & EyeNovaBilling) */}
+      {/* Invoice Receipt Bill Modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+            className={`bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col max-h-[94vh] shadow-2xl transition-all duration-200 ${
+              billPreviewMode === 'A4' ? 'w-full max-w-4xl' : 'w-full max-w-md'
+            }`}
           >
             {/* Header */}
-            <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
+            <div className="p-3 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-                <h3 className="font-medium text-xs text-stone-900 truncate">
-                  Receipt / فاتورة #{selectedInvoice.invoiceNumber}
+                <h3 className="font-semibold text-xs text-stone-900 truncate">
+                  Invoice #{selectedInvoice.invoiceNumber}
                 </h3>
                 <StatusIndicator status={selectedInvoice.status} variant={statusToVariant(selectedInvoice.status)} />
               </div>
+
+              {/* View Mode Toggle: A4 vs 80mm */}
+              <div className="flex items-center bg-stone-200/80 p-0.5 rounded-lg border border-stone-300/70 text-[11px] font-medium">
+                <button
+                  type="button"
+                  onClick={() => setBillPreviewMode('A4')}
+                  className={`px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                    billPreviewMode === 'A4'
+                      ? 'bg-white text-stone-900 font-semibold shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <FileText size={12} className={billPreviewMode === 'A4' ? 'text-stone-900' : 'text-stone-500'} />
+                  <span>A4 Tax Invoice / فاتورة A4</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillPreviewMode('80MM')}
+                  className={`px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                    billPreviewMode === '80MM'
+                      ? 'bg-white text-stone-900 font-semibold shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <Printer size={12} className={billPreviewMode === '80MM' ? 'text-stone-900' : 'text-stone-500'} />
+                  <span>80mm Slip / إيصال حراري</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setSelectedInvoice(null)}
-                className="text-stone-400 hover:text-stone-700 p-1 rounded transition cursor-pointer"
+                className="text-stone-400 hover:text-stone-700 p-1 rounded-md transition cursor-pointer hover:bg-stone-200/50"
               >
-                <X size={15} />
+                <X size={16} />
               </button>
             </div>
 
-            {/* 80mm Thermal Receipt Preview Canvas */}
-            <div className="p-4 overflow-y-auto bg-stone-100 flex justify-center">
-              <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
+            {/* Bill Preview Area */}
+            <div className="p-4 sm:p-6 overflow-y-auto bg-stone-100 flex justify-center">
+              {billPreviewMode === 'A4' ? (
+                <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
+              ) : (
+                <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
+              )}
             </div>
 
             {/* Modal Actions */}
-            <div className="p-3 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-              <div className="flex items-center gap-1.5">
+            <div className="p-3 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => downloadReceiptPdf(toReceiptPayload(selectedInvoice))}
-                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-[11px] font-medium text-stone-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                  onClick={() => setEditingInvoice(selectedInvoice)}
+                  className="px-3 py-1.5 border border-blue-200 bg-blue-50/70 hover:bg-blue-100 rounded-md text-xs font-semibold text-blue-900 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                 >
-                  <Download size={11} /> 80mm PDF
+                  <Pencil size={12} className="text-blue-700" /> Edit Invoice / تعديل
                 </button>
                 <button
                   type="button"
                   onClick={() => downloadA4InvoicePdf(toReceiptPayload(selectedInvoice))}
-                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-[11px] font-medium text-stone-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                  className="px-3 py-1.5 border border-stone-300 bg-white hover:bg-stone-100 rounded-md text-xs font-semibold text-stone-800 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
                 >
-                  <FileText size={11} /> A4 PDF
+                  <Download size={13} className="text-emerald-700" /> Download A4 PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadReceiptPdf(toReceiptPayload(selectedInvoice))}
+                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-xs font-medium text-stone-700 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                >
+                  <Download size={12} /> 80mm Slip PDF
                 </button>
               </div>
 
@@ -515,8 +591,21 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
-          {/* Hidden Thermal Print Area for browser / ESC-POS printer */}
-      <PrintReceiptArea receipt={selectedInvoice ? toReceiptPayload(selectedInvoice) : null} />
+      {/* Edit Invoice Modal */}
+      {editingInvoice && (
+        <EditInvoiceModal
+          invoice={editingInvoice}
+          isOpen={!!editingInvoice}
+          onClose={() => setEditingInvoice(null)}
+          onSaveSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* Hidden Print Area for browser print (supports A4 and 80mm) */}
+      <PrintReceiptArea
+        receipt={selectedInvoice ? toReceiptPayload(selectedInvoice) : null}
+        format={billPreviewMode}
+      />
     </Shell>
   );
 }

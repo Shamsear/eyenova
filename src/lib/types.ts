@@ -1,4 +1,4 @@
-export interface PowerPriceTier {
+﻿export interface PowerPriceTier {
   id: string;
   name: string;
   minPower?: number | null;
@@ -127,6 +127,7 @@ export interface ReceiptPayload {
   cashierName: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   paymentMethod: string;
   paymentReference?: string;
   items: ReceiptItem[];

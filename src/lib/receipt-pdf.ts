@@ -2,231 +2,298 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptPayload } from './types';
 
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+function qar(amount: number): string {
+  return `${amount.toFixed(2)} QAR`;
+}
+
+function drawDashedLine(
+  doc: jsPDF,
+  x1: number,
+  y: number,
+  x2: number,
+  lw = 0.25,
+): void {
+  doc.setLineWidth(lw);
+  doc.setLineDashPattern([1.2, 1.2], 0);
+  doc.line(x1, y, x2, y);
+  doc.setLineDashPattern([], 0);
+}
+
+function drawSolidLine(
+  doc: jsPDF,
+  x1: number,
+  y: number,
+  x2: number,
+  lw = 0.4,
+): void {
+  doc.setLineWidth(lw);
+  doc.setLineDashPattern([], 0);
+  doc.line(x1, y, x2, y);
+}
+
+// ─────────────────────────────────────────────
+// 80 mm Thermal Receipt
+// ─────────────────────────────────────────────
+
 /**
- * Generates an exact 80mm thermal receipt PDF matching EyeNovaBilling ReceiptDocument.cs
+ * Generates an 80 mm thermal receipt PDF.
+ * Column layout (from left, all in mm):
+ *   ITEM  [4 – 42]   QTY centre 47   PRICE right 61   TOTAL right 76
+ * Totals block:
+ *   label right-aligned at 61   value right-aligned at 76
  */
 export function generateReceiptPdf(data: ReceiptPayload): jsPDF {
-  // Dynamic height calculation: base height 140mm + 12mm per item + extra for notes
-  const baseHeight = 145;
-  const itemHeight = Math.max(1, data.items.length) * 12;
-  const totalHeightMm = Math.max(180, baseHeight + itemHeight);
+  const PAGE_W = 80;
+  const MARGIN = 4;
 
-  // 80mm width format (standard thermal POS roll)
+  // Dynamic height based on item count
+  const baseH = 148;
+  const itemH = Math.max(1, data.items.length) * 14;
+  const totalH = Math.max(180, baseH + itemH);
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: [80, totalHeightMm],
+    format: [PAGE_W, totalH],
   });
 
-  const margin = 4;
-  const pageWidth = 80;
-  const printableWidth = pageWidth - margin * 2;
   let y = 8;
+  const RIGHT = PAGE_W - MARGIN; // 76
 
-  // Header - Store Name
+  // ── Store Name (EN only – built-in fonts cannot render Arabic) ──
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', pageWidth / 2, y, { align: 'center' });
-  y += 5;
+  doc.setTextColor(0, 0, 0);
+  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', PAGE_W / 2, y, {
+    align: 'center',
+  });
+  y += 5.5;
 
-  if (data.storeNameAr) {
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text(data.storeNameAr, pageWidth / 2, y, { align: 'center' });
-    y += 4.5;
-  }
-
-  doc.setFontSize(7.5);
+  // Sub-header: address, phone, CR/VAT
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(60, 60, 60);
+
   if (data.addressEn) {
-    doc.text(data.addressEn, pageWidth / 2, y, { align: 'center' });
+    doc.text(data.addressEn, PAGE_W / 2, y, { align: 'center' });
     y += 3.5;
   }
   if (data.phone) {
-    doc.text(`Tel: ${data.phone}`, pageWidth / 2, y, { align: 'center' });
+    doc.text(`Tel: ${data.phone}`, PAGE_W / 2, y, { align: 'center' });
     y += 3.5;
   }
-  if (data.crNumber || data.vatNumber) {
-    const reg = [data.crNumber ? `CR: ${data.crNumber}` : '', data.vatNumber ? `VAT: ${data.vatNumber}` : '']
-      .filter(Boolean)
-      .join('  |  ');
-    doc.text(reg, pageWidth / 2, y, { align: 'center' });
+  const regParts: string[] = [];
+  if (data.crNumber) regParts.push(`CR: ${data.crNumber}`);
+  if (data.vatNumber) regParts.push(`VAT: ${data.vatNumber}`);
+  if (regParts.length) {
+    doc.text(regParts.join('  |  '), PAGE_W / 2, y, { align: 'center' });
     y += 4;
   }
 
-  // Divider
-  doc.setLineWidth(0.3);
-  doc.setLineDashPattern([1, 1], 0);
-  doc.line(margin, y, pageWidth - margin, y);
-  doc.setLineDashPattern([], 0);
+  // ── Section divider ──
+  drawDashedLine(doc, MARGIN, y, RIGHT);
   y += 4;
 
-  // Tax Invoice Title
+  // ── Title ──
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('TAX INVOICE / SIMPLIFIED RECEIPT', pageWidth / 2, y, { align: 'center' });
-  y += 4.5;
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text('TAX INVOICE / SIMPLIFIED RECEIPT', PAGE_W / 2, y, {
+    align: 'center',
+  });
+  y += 5;
 
-  // Meta Details
+  // ── Meta rows ──
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 30, 30);
 
-  doc.text(`Invoice: ${data.invoiceNumber}`, margin, y);
-  doc.text(`Date: ${data.date}`, pageWidth - margin, y, { align: 'right' });
-  y += 3.5;
+  doc.text(`Invoice: ${data.invoiceNumber}`, MARGIN, y);
+  doc.text(`Date: ${data.date}`, RIGHT, y, { align: 'right' });
+  y += 3.8;
 
-  doc.text(`Order: ${data.orderNumber}`, margin, y);
-  doc.text(`Time: ${data.time}`, pageWidth - margin, y, { align: 'right' });
-  y += 3.5;
+  doc.text(`Order: ${data.orderNumber}`, MARGIN, y);
+  doc.text(`Time: ${data.time}`, RIGHT, y, { align: 'right' });
+  y += 3.8;
 
-  doc.text(`Cashier: ${data.cashierName || 'Cashier'}`, margin, y);
-  y += 3.5;
+  doc.text(`Cashier: ${data.cashierName || 'Cashier'}`, MARGIN, y);
+  y += 3.8;
 
-  if (data.customerName && data.customerName !== 'Walk-in Customer') {
-    doc.text(`Customer: ${data.customerName}`, margin, y);
+  const isWalkIn =
+    !data.customerName ||
+    data.customerName.toLowerCase().includes('walk') ||
+    data.customerName.toLowerCase().includes('counter');
+
+  if (!isWalkIn) {
+    doc.text(`Customer: ${data.customerName}`, MARGIN, y);
     if (data.customerPhone) {
-      doc.text(data.customerPhone, pageWidth - margin, y, { align: 'right' });
+      doc.text(data.customerPhone, RIGHT, y, { align: 'right' });
     }
-    y += 3.5;
+    y += 3.8;
   }
 
-  // Items Header Line
-  doc.setLineDashPattern([1, 1], 0);
-  doc.line(margin, y, pageWidth - margin, y);
-  doc.setLineDashPattern([], 0);
+  // ── Items table header ──
+  drawDashedLine(doc, MARGIN, y, RIGHT);
   y += 3.5;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
-  doc.text('ITEM', margin, y);
-  doc.text('QTY', 48, y, { align: 'center' });
-  doc.text('PRICE', 60, y, { align: 'right' });
-  doc.text('TOTAL', pageWidth - margin, y, { align: 'right' });
+  doc.text('ITEM', MARGIN, y);
+  doc.text('QTY', 47, y, { align: 'center' });
+  doc.text('PRICE', 61, y, { align: 'right' });
+  doc.text('TOTAL', RIGHT, y, { align: 'right' });
   y += 2.5;
 
-  doc.setLineWidth(0.2);
-  doc.line(margin, y, pageWidth - margin, y);
+  drawSolidLine(doc, MARGIN, y, RIGHT, 0.2);
   y += 3.5;
 
-  // Items List
-  doc.setFont('helvetica', 'normal');
+  // ── Items ──
   for (const item of data.items) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    // Truncate title if long
-    const title = item.name.length > 25 ? item.name.substring(0, 24) + '…' : item.name;
-    doc.text(title, margin, y);
+    doc.setTextColor(0, 0, 0);
+
+    const nameFirst =
+      item.name.length > 28 ? item.name.substring(0, 27) + '\u2026' : item.name;
+    doc.text(nameFirst, MARGIN, y);
 
     doc.setFont('helvetica', 'normal');
-    doc.text(`${item.quantity}`, 48, y, { align: 'center' });
-    doc.text(`${item.unitPrice.toFixed(2)}`, 60, y, { align: 'right' });
-    doc.text(`${item.total.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-    y += 3.2;
+    doc.text(`${item.quantity}`, 47, y, { align: 'center' });
+    doc.text(`${item.unitPrice.toFixed(2)}`, 61, y, { align: 'right' });
+    doc.text(`${item.total.toFixed(2)}`, RIGHT, y, { align: 'right' });
+    y += 3.5;
 
     if (item.specs) {
-      doc.setFontSize(6.8);
-      doc.setTextColor(80, 80, 80);
-      doc.text(item.specs, margin + 1.5, y);
+      doc.setFontSize(6.5);
+      doc.setTextColor(90, 90, 90);
+      doc.text(item.specs, MARGIN + 1.5, y);
       doc.setTextColor(0, 0, 0);
       y += 3.2;
     }
-    y += 1;
+    y += 0.8;
   }
 
-  // Divider
-  doc.setLineDashPattern([1, 1], 0);
-  doc.line(margin, y, pageWidth - margin, y);
-  doc.setLineDashPattern([], 0);
+  // ── Divider before totals ──
+  drawDashedLine(doc, MARGIN, y, RIGHT);
   y += 4;
 
-  // Totals Section
-  const rightAlign = pageWidth - margin;
-  const labelX = 40;
-
+  // ── Totals: labels right-aligned at 61, values right-aligned at 76 ──
+  const TOT_LABEL = 61;
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(30, 30, 30);
 
-  doc.text('Subtotal:', labelX, y);
-  doc.text(`${data.subtotal.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
-  y += 3.5;
+  doc.text('Subtotal:', TOT_LABEL, y, { align: 'right' });
+  doc.text(qar(data.subtotal), RIGHT, y, { align: 'right' });
+  y += 3.8;
 
   if (data.discount > 0) {
-    doc.text('Discount:', labelX, y);
-    doc.text(`-${data.discount.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
-    y += 3.5;
+    doc.setTextColor(30, 120, 80);
+    doc.text('Discount:', TOT_LABEL, y, { align: 'right' });
+    doc.text(`-${qar(data.discount)}`, RIGHT, y, { align: 'right' });
+    doc.setTextColor(30, 30, 30);
+    y += 3.8;
   }
 
   if (data.deliveryFee > 0) {
-    doc.text('Delivery Fee:', labelX, y);
-    doc.text(`${data.deliveryFee.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
-    y += 3.5;
+    doc.text('Delivery:', TOT_LABEL, y, { align: 'right' });
+    doc.text(qar(data.deliveryFee), RIGHT, y, { align: 'right' });
+    y += 3.8;
   }
 
   if (data.taxAmount > 0) {
-    doc.text(`Tax (${data.taxRate}%):`, labelX, y);
-    doc.text(`${data.taxAmount.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
-    y += 3.5;
+    const taxLabel = data.taxRate > 0 ? `Tax (${data.taxRate}%):` : 'Tax:';
+    doc.text(taxLabel, TOT_LABEL, y, { align: 'right' });
+    doc.text(qar(data.taxAmount), RIGHT, y, { align: 'right' });
+    y += 3.8;
   }
 
-  // Solid Grand Total Divider
-  doc.setLineWidth(0.4);
-  doc.line(margin, y, pageWidth - margin, y);
+  // Grand total
+  drawSolidLine(doc, MARGIN, y, RIGHT, 0.45);
   y += 4;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('TOTAL:', labelX, y);
-  doc.text(`${data.total.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL:', TOT_LABEL, y, { align: 'right' });
+  doc.text(qar(data.total), RIGHT, y, { align: 'right' });
   y += 4.5;
 
-  doc.setLineWidth(0.4);
-  doc.line(margin, y, pageWidth - margin, y);
+  drawSolidLine(doc, MARGIN, y, RIGHT, 0.45);
   y += 3.5;
 
-  // Payment Breakdown
+  // ── Payment info ──
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Paid via: ${data.paymentMethod}`, margin, y);
+  doc.setTextColor(30, 30, 30);
+  doc.text(`Paid via: ${data.paymentMethod}`, MARGIN, y);
   if (data.paymentReference) {
-    doc.text(`Ref: ${data.paymentReference}`, rightAlign, y, { align: 'right' });
+    doc.text(`Ref: ${data.paymentReference}`, RIGHT, y, { align: 'right' });
   }
-  y += 3.5;
+  y += 3.8;
 
   if (data.cashTendered !== undefined && data.cashTendered > 0) {
-    doc.text(`Cash Tendered:`, margin, y);
-    doc.text(`${data.cashTendered.toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
-    y += 3.2;
-
-    doc.text(`Change Due:`, margin, y);
-    doc.text(`${(data.changeDue ?? 0).toFixed(2)} QAR`, rightAlign, y, { align: 'right' });
+    doc.text('Cash Tendered:', MARGIN, y);
+    doc.text(qar(data.cashTendered), RIGHT, y, { align: 'right' });
     y += 3.5;
+    doc.text('Change Due:', MARGIN, y);
+    doc.text(qar(data.changeDue ?? 0), RIGHT, y, { align: 'right' });
+    y += 3.8;
   }
 
-  // Barcode representation
-  y += 3;
-  doc.setLineWidth(0.2);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 4;
+  // ── Invoice reference line ──
+  y += 2;
+  drawSolidLine(doc, MARGIN, y, RIGHT, 0.2);
+  y += 4.5;
 
-  doc.setFont('courier', 'bold');
-  doc.setFontSize(9);
-  doc.text(`*${data.invoiceNumber}*`, pageWidth / 2, y, { align: 'center' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text(data.invoiceNumber, PAGE_W / 2, y, { align: 'center' });
   y += 5;
 
-  // Footer notes
+  // ── Footer ──
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.text('Thank you for choosing EyeNova Optical!', pageWidth / 2, y, { align: 'center' });
+  doc.setFontSize(6.8);
+  doc.setTextColor(80, 80, 80);
+  doc.text('Thank you for choosing EyeNova Optical!', PAGE_W / 2, y, {
+    align: 'center',
+  });
   y += 3.5;
-  doc.text('Please retain this receipt for warranty and exchanges.', pageWidth / 2, y, { align: 'center' });
+  doc.text(
+    'Please retain this receipt for warranty and exchanges.',
+    PAGE_W / 2,
+    y,
+    { align: 'center' },
+  );
   y += 3.2;
-  doc.text('Exchange / Return within 14 days in original condition.', pageWidth / 2, y, { align: 'center' });
+  doc.text(
+    'Exchange / Return within 14 days in original condition.',
+    PAGE_W / 2,
+    y,
+    { align: 'center' },
+  );
 
   return doc;
 }
 
+// ─────────────────────────────────────────────
+// A4 Formal Tax Invoice
+// ─────────────────────────────────────────────
+
 /**
- * Generates formal A4 Tax Invoice PDF matching EyeNovaBilling QuestPDF
+ * Generates a professional A4 Tax Invoice PDF.
+ *
+ * Fixes vs. original:
+ *  - Right column starts at midpoint (109 mm) instead of hardcoded 120 mm
+ *  - "Served by" moved to ORDER DETAILS column (was wrongly in BILLED TO)
+ *  - Email row added to BILLED TO column
+ *  - Totals block uses a shaded rounded rect for visual hierarchy
+ *  - Typography harmonised throughout
+ *  - Professional page footer with invoice number and page indicator
  */
 export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
   const doc = new jsPDF({
@@ -235,169 +302,284 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
     format: 'a4',
   });
 
-  const pageWidth = 210;
-  const margin = 15;
-  let y = 18;
+  const PAGE_W = 210;
+  const PAGE_H = 297;
+  const MARGIN = 15;
+  const RIGHT = PAGE_W - MARGIN; // 195
+  const MID = 105;
+  const COL_R = MID + 4; // right column x-start
 
-  // Header Title
+  let y = 20;
+
+  // ── Header: store name left, TAX INVOICE pill right ──
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.setTextColor(15, 23, 42); // Slate 900
-  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', margin, y);
-
-  doc.setFontSize(12);
-  doc.setTextColor(37, 99, 235); // Blue 600
-  doc.text('TAX INVOICE', pageWidth - margin, y, { align: 'right' });
-  y += 7;
-
-  // Company info
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105);
-  doc.text(`${data.addressEn || 'Doha, Qatar'} | Tel: ${data.phone || '+974 4455 0202'}`, margin, y);
-  doc.text(`Invoice #: ${data.invoiceNumber}`, pageWidth - margin, y, { align: 'right' });
-  y += 5;
-
-  doc.text(`CR: ${data.crNumber || '184920'} | VAT: ${data.vatNumber || 'QA-987654321'}`, margin, y);
-  doc.text(`Date: ${data.date}  ${data.time}`, pageWidth - margin, y, { align: 'right' });
-  y += 8;
-
-  // Separator bar
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 8;
-
-  // Customer Block & Order Block (2 columns)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(18);
   doc.setTextColor(15, 23, 42);
-  doc.text('BILLED TO:', margin, y);
-  doc.text('ORDER SUMMARY:', 120, y);
-  y += 5;
+  doc.text(data.storeNameEn || 'EYENOVA OPTICAL', MARGIN, y);
 
+  // Dark pill badge
+  const badgeW = 38;
+  const badgeH = 7;
+  const badgeX = RIGHT - badgeW;
+  const badgeY = y - 6;
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.5, 1.5, 'F');
+  doc.setFontSize(10);
+  doc.setTextColor(255, 255, 255);
+  doc.text('TAX INVOICE', badgeX + badgeW / 2, badgeY + 4.8, {
+    align: 'center',
+  });
+
+  y += 6;
+
+  // Company sub-info
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(51, 65, 85);
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
 
-  doc.text(`Name: ${data.customerName || 'Walk-in Customer'}`, margin, y);
-  doc.text(`Order Reference: ${data.orderNumber}`, 120, y);
-  y += 5;
+  const addressLine = [
+    data.addressEn || '',
+    data.phone ? `Tel: ${data.phone}` : '',
+  ]
+    .filter(Boolean)
+    .join('  \u00b7  ');
+  doc.text(addressLine, MARGIN, y);
+  y += 4.5;
 
-  doc.text(`Phone: ${data.customerPhone || '—'}`, margin, y);
-  doc.text(`Payment Method: ${data.paymentMethod}`, 120, y);
-  y += 5;
-
-  doc.text(`Served by: ${data.cashierName || 'Cashier'}`, margin, y);
-  if (data.paymentReference) {
-    doc.text(`Payment Ref: ${data.paymentReference}`, 120, y);
+  const regLine = [
+    data.crNumber ? `CR: ${data.crNumber}` : '',
+    data.vatNumber ? `VAT: ${data.vatNumber}` : '',
+  ]
+    .filter(Boolean)
+    .join('  \u00b7  ');
+  if (regLine) {
+    doc.text(regLine, MARGIN, y);
   }
-  y += 10;
 
-  // Table of Items
-  const tableData = data.items.map((item, index) => [
-    (index + 1).toString(),
+  // Invoice # and Date — right-aligned at the same y as company sub-info
+  const metaY = y - 4.5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Invoice #:', RIGHT - 42, metaY);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(data.invoiceNumber, RIGHT, metaY, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('Date:', RIGHT - 42, metaY + 4.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`${data.date}  ${data.time}`, RIGHT, metaY + 4.5, {
+    align: 'right',
+  });
+
+  y += 9;
+
+  // ── Separator ──
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN, y, RIGHT, y);
+  y += 8;
+
+  // ── Two-column info block ──
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('BILLED TO', MARGIN, y);
+  doc.text('ORDER DETAILS', COL_R, y);
+  y += 4.5;
+
+  // [leftLabel, leftValue, rightLabel, rightValue]
+  type InfoRow = [string, string, string, string];
+  const infoRows: InfoRow[] = [
+    ['Name:', data.customerName || 'Walk-in Customer', 'Reference:', data.orderNumber],
+    ['Phone:', data.customerPhone || '\u2014', 'Payment:', data.paymentMethod],
+    ['Email:', data.customerEmail || '\u2014', 'Served by:', data.cashierName || 'Cashier'],
+  ];
+  if (data.paymentReference) {
+    infoRows.push(['', '', 'Ref:', data.paymentReference]);
+  }
+
+  doc.setFontSize(8.5);
+  for (const [lLabel, lVal, rLabel, rVal] of infoRows) {
+    if (lLabel) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 65, 85);
+      doc.text(lLabel, MARGIN, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text(lVal, MARGIN + 15, y);
+    }
+    if (rLabel) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 65, 85);
+      doc.text(rLabel, COL_R, y);
+      doc.setFont('helvetica', 'normal');
+      const displayVal = rVal.length > 32 ? rVal.substring(0, 31) + '\u2026' : rVal;
+      doc.text(displayVal, COL_R + 24, y);
+    }
+    y += 5;
+  }
+
+  y += 5;
+
+  // ── Items table ──
+  // Total column widths: 8 + 97 + 15 + 30 + 30 = 180 mm = 210 - 2*15
+  const tableData = data.items.map((item, i) => [
+    (i + 1).toString(),
     item.name + (item.specs ? `\n${item.specs}` : ''),
     item.quantity.toString(),
-    `${item.unitPrice.toFixed(2)} QAR`,
-    `${item.total.toFixed(2)} QAR`,
+    qar(item.unitPrice),
+    qar(item.total),
   ]);
 
   autoTable(doc, {
     startY: y,
     head: [['#', 'Item & Prescription Specs', 'Qty', 'Unit Price', 'Total']],
     body: tableData,
-    margin: { left: margin, right: margin },
+    margin: { left: MARGIN, right: MARGIN },
     headStyles: {
       fillColor: [15, 23, 42],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize: 9,
+      fontSize: 8.5,
+      cellPadding: 3,
     },
     bodyStyles: {
       fontSize: 8.5,
       textColor: [30, 41, 59],
+      cellPadding: 2.5,
     },
     columnStyles: {
-      0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 100 },
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 97 },
       2: { cellWidth: 15, halign: 'center' },
-      3: { cellWidth: 28, halign: 'right' },
-      4: { cellWidth: 27, halign: 'right' },
+      3: { cellWidth: 30, halign: 'right' },
+      4: { cellWidth: 30, halign: 'right' },
     },
     alternateRowStyles: {
       fillColor: [248, 250, 252],
     },
   });
 
-  // Totals at bottom right
-  // @ts-expect-error autoTable adds lastAutoTable to doc
-  const finalY = doc.lastAutoTable?.finalY ? doc.lastAutoTable.finalY + 8 : y + 60;
-  let totY = finalY;
-  const totXLabel = 135;
-  const totXVal = pageWidth - margin;
+  // ── Totals block ──
+  // @ts-expect-error autoTable extends jsPDF instance at runtime
+  const tableEndY: number = doc.lastAutoTable?.finalY ?? y + 40;
+  let totY = tableEndY + 8;
 
-  doc.setFontSize(9);
-  doc.text('Subtotal:', totXLabel, totY);
-  doc.text(`${data.subtotal.toFixed(2)} QAR`, totXVal, totY, { align: 'right' });
-  totY += 5;
+  const BOX_X = MID + 10;
+  const BOX_W = RIGHT - BOX_X;
 
-  if (data.discount > 0) {
-    doc.text('Discount:', totXLabel, totY);
-    doc.text(`-${data.discount.toFixed(2)} QAR`, totXVal, totY, { align: 'right' });
-    totY += 5;
-  }
+  const lineCount =
+    1 +
+    (data.discount > 0 ? 1 : 0) +
+    (data.deliveryFee > 0 ? 1 : 0) +
+    (data.taxAmount > 0 ? 1 : 0);
+  const BOX_H = lineCount * 7 + 20;
 
-  if (data.deliveryFee > 0) {
-    doc.text('Delivery Fee:', totXLabel, totY);
-    doc.text(`${data.deliveryFee.toFixed(2)} QAR`, totXVal, totY, { align: 'right' });
-    totY += 5;
-  }
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(BOX_X - 3, totY - 4, BOX_W + 3, BOX_H, 2, 2, 'FD');
 
+  const VAL_X = RIGHT - 2;
+  const LBL_X = BOX_X + 2;
+
+  doc.setFontSize(8.5);
+
+  const writeRow = (
+    label: string,
+    val: string,
+    r = 51,
+    g = 65,
+    b = 85,
+  ): void => {
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(r, g, b);
+    doc.text(label, LBL_X, totY);
+    doc.text(val, VAL_X, totY, { align: 'right' });
+    totY += 7;
+  };
+
+  writeRow('Subtotal:', qar(data.subtotal));
+  if (data.discount > 0) writeRow('Discount:', `-${qar(data.discount)}`, 22, 163, 74);
+  if (data.deliveryFee > 0) writeRow('Delivery Fee:', qar(data.deliveryFee));
   if (data.taxAmount > 0) {
-    doc.text(`Tax (${data.taxRate}%):`, totXLabel, totY);
-    doc.text(`${data.taxAmount.toFixed(2)} QAR`, totXVal, totY, { align: 'right' });
-    totY += 5;
+    const taxLabel = data.taxRate > 0 ? `Tax (${data.taxRate}%):` : 'Tax:';
+    writeRow(taxLabel, qar(data.taxAmount));
   }
 
+  // Divider inside box
   doc.setDrawColor(203, 213, 225);
-  doc.line(totXLabel - 2, totY, totXVal, totY);
+  doc.setLineWidth(0.4);
+  doc.line(BOX_X - 1, totY, RIGHT, totY);
   totY += 5;
 
+  // Grand total
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(15, 23, 42);
-  doc.text('Total Amount Due:', totXLabel, totY);
-  doc.text(`${data.total.toFixed(2)} QAR`, totXVal, totY, { align: 'right' });
-  totY += 15;
+  doc.text('Total Due:', LBL_X, totY);
+  doc.text(qar(data.total), VAL_X, totY, { align: 'right' });
+  totY += 14;
 
-  // Terms and conditions
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
+  // ── Terms & Conditions ──
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('Terms & Conditions:', margin, totY);
+  doc.text('Terms & Conditions', MARGIN, totY);
   totY += 4;
-  doc.text('1. Goods once sold can be exchanged or returned within 14 days if unopened and in original packaging.', margin, totY);
-  totY += 3.5;
-  doc.text('2. Custom cut prescription lenses and opened contact lenses cannot be returned or refunded.', margin, totY);
-  totY += 3.5;
-  doc.text('3. This is an electronically generated computer invoice and does not require a physical stamp.', margin, totY);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  const terms = [
+    '1. Goods may be exchanged or returned within 14 days if unopened and in original packaging.',
+    '2. Custom-cut prescription lenses and opened contact lenses cannot be returned or refunded.',
+    '3. This invoice is electronically generated and is valid without a physical stamp or signature.',
+  ];
+  for (const term of terms) {
+    doc.text(term, MARGIN, totY);
+    totY += 4;
+  }
+
+  // ── Page footer ──
+  const FOOTER_Y = PAGE_H - 10;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, FOOTER_Y - 3, RIGHT, FOOTER_Y - 3);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(148, 163, 184);
+  doc.text(data.storeNameEn || 'EyeNova Optical', MARGIN, FOOTER_Y);
+  doc.text('Page 1 of 1', PAGE_W / 2, FOOTER_Y, { align: 'center' });
+  doc.text(`Invoice ${data.invoiceNumber}`, RIGHT, FOOTER_Y, {
+    align: 'right',
+  });
 
   return doc;
 }
 
-/**
- * Triggers instant browser download of receipt PDF
- */
-export function downloadReceiptPdf(data: ReceiptPayload, filename?: string): void {
+// ─────────────────────────────────────────────
+// Download helpers
+// ─────────────────────────────────────────────
+
+/** Triggers browser download of the 80 mm thermal receipt PDF. */
+export function downloadReceiptPdf(
+  data: ReceiptPayload,
+  filename?: string,
+): void {
   const doc = generateReceiptPdf(data);
   doc.save(filename || `Receipt_${data.invoiceNumber}.pdf`);
 }
 
-/**
- * Triggers instant browser download of A4 Invoice PDF
- */
-export function downloadA4InvoicePdf(data: ReceiptPayload, filename?: string): void {
+/** Triggers browser download of the A4 formal invoice PDF. */
+export function downloadA4InvoicePdf(
+  data: ReceiptPayload,
+  filename?: string,
+): void {
   const doc = generateA4InvoicePdf(data);
   doc.save(filename || `Invoice_${data.invoiceNumber}.pdf`);
 }

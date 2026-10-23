@@ -155,6 +155,7 @@ export default function InvoicesPage() {
       cashierName: inv.salespersonName || user?.fullName || 'Cashier',
       customerName: inv.customerName,
       customerPhone: inv.customerPhone,
+      customerEmail: inv.customerEmail || undefined,
       paymentMethod: inv.paymentMethod,
       paymentReference: inv.paymentReference,
       items: (inv.items || []).map((it) => ({

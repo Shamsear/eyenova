@@ -106,6 +106,7 @@ export interface HeldSaleItem {
 
 export interface ReceiptItem {
   name: string;
+  nameAr?: string;
   specs?: string;
   quantity: number;
   unitPrice: number;
@@ -124,6 +125,7 @@ export interface ReceiptPayload {
   phone: string;
   crNumber: string;
   vatNumber: string;
+  website?: string;
   cashierName: string;
   customerName: string;
   customerPhone: string;

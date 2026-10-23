@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
+import { ThermalReceiptBill } from '@/components/shared/thermal-receipt-bill';
+import { PrintReceiptArea } from '@/components/shared/print-receipt';
+
 
 interface InvoiceRow {
   id: string;
@@ -46,6 +49,7 @@ interface InvoiceRow {
     id: string;
     productId: string;
     name: string;
+    nameAr?: string;
     specs: string;
     quantity: number;
     unitPrice: number;
@@ -86,6 +90,7 @@ export default function InvoicesPage() {
   const [refundModalInvoice, setRefundModalInvoice] = useState<InvoiceRow | null>(null);
   const [refundReason, setRefundReason] = useState('Customer return');
   const [refundError, setRefundError] = useState('');
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
 
   const { canRefund, user, store } = useSessionStore();
 
@@ -98,6 +103,7 @@ export default function InvoicesPage() {
       const res = await fetch(`/api/invoices?${params.toString()}`);
       const data = await res.json();
       if (data.invoices) setInvoices(data.invoices);
+      if (data.companyProfile) setCompanyProfile(data.companyProfile);
     } catch (err) {
       console.error('Error loading invoices:', err);
     } finally {
@@ -140,18 +146,20 @@ export default function InvoicesPage() {
   };
 
   const toReceiptPayload = (inv: InvoiceRow): ReceiptPayload => {
+    const dt = inv.issuedAt ? new Date(inv.issuedAt) : new Date(inv.createdAt);
     return {
       invoiceNumber: inv.invoiceNumber,
       orderNumber: inv.orderNumber,
-      date: inv.issuedAt ? new Date(inv.issuedAt).toLocaleDateString('en-US') : new Date().toLocaleDateString('en-US'),
-      time: inv.issuedAt ? new Date(inv.issuedAt).toLocaleTimeString('en-US') : new Date().toLocaleTimeString('en-US'),
-      storeNameEn: store?.name || 'EyeNova Optical',
-      storeNameAr: 'أي نوفا للبصريات',
-      addressEn: store?.address || '02 Mall, Al Kheesa, Doha, Qatar',
-      addressAr: 'مجمع 02، الخيسة، الدوحة، قطر',
-      phone: store?.phone || '+974 4411 2233',
-      crNumber: 'CR-102938',
-      vatNumber: 'QA-VAT-99220011',
+      date: dt.toLocaleDateString('en-GB'),
+      time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      storeNameEn: companyProfile?.nameEn || store?.name || 'EyeNova Optical - 02 Mall, Al Kheesa',
+      storeNameAr: companyProfile?.nameAr || 'آي نوفا للتجارة البصرية',
+      addressEn: companyProfile?.addressEn || store?.address || '02 Mall, 79 Street 773, Al Kheesa',
+      addressAr: companyProfile?.addressAr || '',
+      phone: companyProfile?.phone || store?.phone || '+974 6633 7371',
+      crNumber: companyProfile?.crNumber || '',
+      vatNumber: '',
+      website: companyProfile?.website || 'eyenova.com.qa',
       cashierName: inv.salespersonName || user?.fullName || 'Cashier',
       customerName: inv.customerName,
       customerPhone: inv.customerPhone,
@@ -160,6 +168,7 @@ export default function InvoicesPage() {
       paymentReference: inv.paymentReference,
       items: (inv.items || []).map((it) => ({
         name: it.name,
+        nameAr: it.nameAr,
         specs: it.specs,
         quantity: it.quantity,
         unitPrice: it.unitPrice,
@@ -377,125 +386,63 @@ export default function InvoicesPage() {
         />
       </div>
 
-      {/* Invoice Details Modal */}
+            {/* Invoice Receipt Bill Modal (Same UI copy as POS & EyeNovaBilling) */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+            className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
           >
+            {/* Header */}
             <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
                 <h3 className="font-medium text-xs text-stone-900 truncate">
-                  Invoice #{selectedInvoice.invoiceNumber}
+                  Receipt / فاتورة #{selectedInvoice.invoiceNumber}
                 </h3>
                 <StatusIndicator status={selectedInvoice.status} variant={statusToVariant(selectedInvoice.status)} />
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedInvoice(null)}
-                className="text-stone-400 hover:text-stone-700 p-1 rounded cursor-pointer"
+                className="text-stone-400 hover:text-stone-700 p-1 rounded transition cursor-pointer"
               >
                 <X size={15} />
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto space-y-3 text-xs">
-              {/* Customer & Transaction Meta */}
-              <div className="grid grid-cols-2 gap-2 p-2.5 bg-stone-50 rounded-lg border border-stone-200 text-[11px]">
-                <div>
-                  <span className="text-stone-400 font-mono text-[9px] uppercase block">Client:</span>
-                  <span className="font-medium text-stone-900 truncate block">{selectedInvoice.customerName}</span>
-                  <span className="text-stone-500 font-mono">{selectedInvoice.customerPhone || 'Counter'}</span>
-                </div>
-                <div>
-                  <span className="text-stone-400 font-mono text-[9px] uppercase block">Payment / Time:</span>
-                  <span className="font-medium text-stone-900 truncate block">{selectedInvoice.paymentMethod}</span>
-                  <span className="text-stone-500 font-mono">{formatQatarDateTime(selectedInvoice.issuedAt || selectedInvoice.createdAt)}</span>
-                </div>
-              </div>
-
-              {/* Line Items Table */}
-              <div className="border border-stone-200 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-stone-50 border-b border-stone-200 font-mono text-[9px] text-stone-500 uppercase">
-                    <tr>
-                      <th className="p-2">Item</th>
-                      <th className="p-2 text-center">Qty</th>
-                      <th className="p-2 text-right">Price</th>
-                      <th className="p-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100">
-                    {(selectedInvoice.items || []).map((it) => (
-                      <tr key={it.id} className="h-8">
-                        <td className="p-2 truncate max-w-[160px] font-medium text-stone-800">{it.name}</td>
-                        <td className="p-2 text-center font-mono tabular-nums">
-                          <AnimatedCount value={it.quantity} />
-                        </td>
-                        <td className="p-2 text-right font-mono tabular-nums">
-                          <AnimatedQar value={it.unitPrice} />
-                        </td>
-                        <td className="p-2 text-right font-mono font-medium text-stone-900 tabular-nums">
-                          <AnimatedQar value={it.total} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Financial Totals */}
-              <div className="p-2.5 bg-stone-50 rounded-lg border border-stone-200 space-y-1 text-[11px]">
-                <div className="flex justify-between text-stone-600">
-                  <span>Subtotal:</span>
-                  <AnimatedQar value={selectedInvoice.subtotalQar} className="font-mono tabular-nums" />
-                </div>
-                {selectedInvoice.discountQar > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Discount:</span>
-                    <AnimatedQar value={selectedInvoice.discountQar} prefix="-" className="font-mono tabular-nums" />
-                  </div>
-                )}
-                {selectedInvoice.deliveryFeeQar > 0 && (
-                  <div className="flex justify-between text-stone-600">
-                    <span>Delivery:</span>
-                    <AnimatedQar value={selectedInvoice.deliveryFeeQar} prefix="+" className="font-mono tabular-nums" />
-                  </div>
-                )}
-                <div className="border-t border-stone-200 pt-1 flex justify-between font-medium text-xs text-stone-900">
-                  <span>Total Due:</span>
-                  <AnimatedQar value={selectedInvoice.totalQar} className="font-mono tabular-nums" />
-                </div>
-              </div>
+            {/* 80mm Thermal Receipt Preview Canvas */}
+            <div className="p-4 overflow-y-auto bg-stone-100 flex justify-center">
+              <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
             </div>
 
-            <div className="p-3 bg-stone-50 border-t border-stone-200 flex items-center justify-between gap-2 shrink-0">
+            {/* Modal Actions */}
+            <div className="p-3 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => downloadReceiptPdf(toReceiptPayload(selectedInvoice))}
-                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded text-xs font-medium text-stone-700 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-[11px] font-medium text-stone-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
                 >
-                  <Download size={12} /> 80mm PDF
+                  <Download size={11} /> 80mm PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => downloadA4InvoicePdf(toReceiptPayload(selectedInvoice))}
-                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded text-xs font-medium text-stone-700 flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-[11px] font-medium text-stone-700 flex items-center gap-1 transition cursor-pointer shadow-2xs"
                 >
-                  <FileText size={12} /> A4 PDF
+                  <FileText size={11} /> A4 PDF
                 </button>
               </div>
 
               <button
                 type="button"
-                onClick={() => setSelectedInvoice(null)}
-                className="px-3 py-1.5 bg-stone-900 text-stone-50 rounded text-xs font-medium hover:bg-stone-800 transition cursor-pointer"
+                onClick={() => window.print()}
+                className="px-3.5 py-1.5 bg-stone-900 text-stone-50 rounded-md text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
-                Close
+                <Printer size={13} /> Print / طباعة (Ctrl+P)
               </button>
             </div>
           </motion.div>
@@ -568,6 +515,8 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+          {/* Hidden Thermal Print Area for browser / ESC-POS printer */}
+      <PrintReceiptArea receipt={selectedInvoice ? toReceiptPayload(selectedInvoice) : null} />
     </Shell>
   );
 }

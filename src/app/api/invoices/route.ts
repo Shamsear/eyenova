@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       where.status = status;
     }
 
-    const [invoices, total] = await Promise.all([
+    const [invoices, total, companyProfile, activeStore] = await Promise.all([
       prisma.invoice.findMany({
         where,
         take: limit,
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
               items: {
                 include: {
                   product: {
-                    select: { titleEn: true, sku: true, brandName: true },
+                    select: { titleEn: true, titleAr: true, sku: true, brandName: true },
                   },
                 },
               },
@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.invoice.count({ where }),
+      prisma.companyProfile.findFirst(),
+      prisma.store.findFirst({ where: { isActive: true } }),
     ]);
 
     const formatted = invoices.map((inv) => ({
@@ -73,6 +75,7 @@ export async function GET(req: NextRequest) {
         id: i.id,
         productId: i.productId,
         name: i.product?.titleEn || 'Product Item',
+        nameAr: i.product?.titleAr || null,
         specs: i.addPower || (i.power ? `PWR: ${i.power}` : '') || '',
         quantity: i.quantity,
         unitPrice: Number(i.unitPriceQar),
@@ -85,6 +88,26 @@ export async function GET(req: NextRequest) {
       total,
       page,
       totalPages: Math.ceil(total / limit),
+      companyProfile: companyProfile
+        ? {
+            nameEn: companyProfile.nameEn,
+            nameAr: companyProfile.nameAr,
+            phone: companyProfile.phone,
+            addressEn: companyProfile.addressEn,
+            addressAr: companyProfile.addressAr,
+            crNumber: companyProfile.crNumber,
+            vatNumber: companyProfile.vatNumber,
+            website: companyProfile.website,
+          }
+        : null,
+      store: activeStore
+        ? {
+            name: activeStore.name,
+            code: activeStore.code,
+            address: activeStore.address,
+            phone: activeStore.phone,
+          }
+        : null,
     });
   } catch (error: any) {
     console.error('Error fetching invoices:', error);

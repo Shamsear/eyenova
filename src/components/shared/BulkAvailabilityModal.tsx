@@ -234,8 +234,8 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4 overflow-y-auto">
-      <div className="flex flex-col w-full max-w-5xl h-full sm:h-[92vh] sm:max-h-[92vh] bg-white rounded-none sm:rounded-2xl shadow-2xl overflow-hidden border-0 sm:border sm:border-neutral-200 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
+      <div className="flex flex-col w-full max-w-5xl h-[100dvh] sm:h-[92vh] sm:max-h-[92vh] bg-white rounded-none sm:rounded-2xl shadow-2xl overflow-hidden border-0 sm:border sm:border-neutral-200 animate-in fade-in zoom-in-95 duration-150">
         
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 border-b border-neutral-200 bg-neutral-900 text-white shrink-0">
@@ -260,8 +260,8 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
           </button>
         </div>
 
-        {/* MODAL BODY */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4">
+        {/* MODAL BODY (Master scrollable area) */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 overscroll-contain">
 
           {/* FILE UPLOAD & CONFIGURATION SECTION */}
           <div className="bg-neutral-50 rounded-xl p-3 sm:p-4 border border-neutral-200 space-y-3 shrink-0">
@@ -399,7 +399,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
 
           {/* PREVIEW CONTENT */}
           {previewData && (
-            <div className="flex-1 flex flex-col space-y-3 min-h-0">
+            <div className="space-y-4">
               
               {/* BEFORE & AFTER KPI STAT CARDS */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 shrink-0">
@@ -538,7 +538,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
 
               {/* UNMATCHED TAB */}
               {activeTab === 'UNMATCHED' ? (
-                <div className="flex-1 overflow-y-auto border border-neutral-200 rounded-xl p-3 sm:p-4 bg-amber-50/30">
+                <div className="overflow-y-auto border border-neutral-200 rounded-xl p-3 sm:p-4 bg-amber-50/30 max-h-[55vh]">
                   <h4 className="text-xs font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                     Unmatched Excel Rows ({previewData.unmatchedRows.length} items)
@@ -566,7 +566,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
               ) : (
                 <>
                   {/* MOBILE VIEW (CARD LIST on < md screens with Before & After) */}
-                  <div className="md:hidden flex-1 overflow-y-auto space-y-2 pr-0.5">
+                  <div className="md:hidden space-y-2.5">
                     {filteredProducts.length === 0 ? (
                       <div className="py-8 text-center text-xs text-neutral-400">
                         No products match your search or filter.
@@ -738,8 +738,9 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                   </div>
 
                   {/* DESKTOP/TABLET VIEW (TABLE on >= md screens with Before & After) */}
-                  <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto border border-neutral-200 rounded-xl">
-                    <table className="w-full text-left text-xs min-w-[760px]">
+                  <div className="hidden md:block border border-neutral-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                    <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
+                      <table className="w-full text-left text-xs min-w-[760px]">
                       <thead className="bg-neutral-100 text-neutral-600 font-bold sticky top-0 border-b border-neutral-200 z-10">
                         <tr>
                           <th className="py-2.5 px-3 sm:px-4">Product &amp; SKU</th>
@@ -987,6 +988,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                       </tbody>
                     </table>
                   </div>
+                </div>
                 </>
               )}
             </div>

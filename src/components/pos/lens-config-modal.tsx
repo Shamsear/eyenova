@@ -398,16 +398,18 @@ export function LensConfigModal() {
     ];
   }, []);
 
-  if (!isLensConfigModalOpen || !selectedProductForConfig) return null;
-
   const isToric =
-    selectedProductForConfig.titleEn.toLowerCase().includes('toric') ||
-    selectedProductForConfig.titleEn.toLowerCase().includes('astigmatism') ||
-    selectedProductForConfig.productType === 'SPECTACLES';
+    selectedProductForConfig
+      ? selectedProductForConfig.titleEn.toLowerCase().includes('toric') ||
+        selectedProductForConfig.titleEn.toLowerCase().includes('astigmatism') ||
+        selectedProductForConfig.productType === 'SPECTACLES'
+      : false;
 
   const isMultifocal =
-    selectedProductForConfig.titleEn.toLowerCase().includes('multifocal') ||
-    selectedProductForConfig.titleEn.toLowerCase().includes('presbyopia');
+    selectedProductForConfig
+      ? selectedProductForConfig.titleEn.toLowerCase().includes('multifocal') ||
+        selectedProductForConfig.titleEn.toLowerCase().includes('presbyopia')
+      : false;
 
   const odUnitPrice = useMemo(() => {
     if (!selectedProductForConfig) return 0;
@@ -434,6 +436,8 @@ export function LensConfigModal() {
     if (mode === 'OD_ONLY') return odUnitPrice * odBoxes;
     return osUnitPrice * osBoxes;
   }, [mode, odUnitPrice, odBoxes, osUnitPrice, osBoxes]);
+
+  if (!isLensConfigModalOpen || !selectedProductForConfig) return null;
 
   const handleConfirm = () => {
     if (mode === 'BOTH' || mode === 'OD_ONLY') {

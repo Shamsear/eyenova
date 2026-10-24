@@ -46,10 +46,8 @@ export function EditInvoiceModal({
   onClose,
   onSaveSuccess,
 }: EditInvoiceModalProps) {
-  if (!isOpen) return null;
-
   // Local form state
-  const [customerName, setCustomerName] = useState(invoice.customerName || '');
+  const [customerName, setCustomerName] = useState(invoice?.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
   const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || '');
   const [salespersonName, setSalespersonName] = useState(invoice.salespersonName || '');
@@ -146,6 +144,31 @@ export function EditInvoiceModal({
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (invoice && isOpen) {
+      setCustomerName(invoice.customerName || '');
+      setCustomerPhone(invoice.customerPhone || '');
+      setCustomerEmail(invoice.customerEmail || '');
+      setSalespersonName(invoice.salespersonName || '');
+      setPaymentMethod(invoice.paymentMethod || 'CASH');
+      setPaymentReference(invoice.paymentReference || '');
+      setStatus(invoice.status || 'PAID');
+      setNotes(invoice.notes || '');
+      setItems(
+        (invoice.items || []).map((it) => ({
+          ...it,
+          quantity: Number(it.quantity) || 1,
+          unitPrice: Number(it.unitPrice) || 0,
+          total: Number(it.total) || 0,
+        }))
+      );
+      setDiscountQar(Number(invoice.discountQar) || 0);
+      setDeliveryFeeQar(Number(invoice.deliveryFeeQar) || 0);
+    }
+  }, [invoice, isOpen]);
+
+  if (!isOpen || !invoice) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto animate-in fade-in duration-150">

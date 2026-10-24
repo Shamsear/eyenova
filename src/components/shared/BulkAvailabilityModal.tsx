@@ -86,8 +86,6 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
     details?: string[];
   } | null>(null);
 
-  if (!isOpen) return null;
-
   async function handleFetchPreview() {
     setIsLoadingRunning(true);
     setResultMessage(null);
@@ -200,6 +198,8 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
       return true;
     });
   }, [previewData, searchQuery, selectedBrandFilter, activeTab]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

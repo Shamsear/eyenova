@@ -108,18 +108,11 @@ export async function POST(req: NextRequest) {
     if (uploadedFile && uploadedFile.size > 0) {
       const arrayBuffer = await uploadedFile.arrayBuffer();
       fileBuffer = Buffer.from(arrayBuffer);
-    } else {
-      // Fallback to default local file if available
-      const defaultParts = ['D:', 'movie', 'Bella Update.xlsx'];
-      const defaultPath = defaultParts.join(path.sep);
-      if (fs.existsSync(defaultPath)) {
-        fileBuffer = fs.readFileSync(defaultPath);
-      }
     }
 
     if (!fileBuffer) {
       return NextResponse.json(
-        { error: 'No Excel file provided and default file D:\\movie\\Bella Update.xlsx not found on server.' },
+        { error: 'Please select and upload an Excel (.xlsx or .xls) file.' },
         { status: 400 }
       );
     }

@@ -17,6 +17,8 @@ import {
   ArrowRight,
   Plus,
   Minus,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 
 interface ProductPlanItem {
@@ -27,6 +29,7 @@ interface ProductPlanItem {
   brandName: string | null;
   productType?: string | null;
   isUnlisted: boolean;
+  isMarkedOos?: boolean;
   // BEFORE STATE
   beforeActivePowers: string[];
   beforeActivePowersCount: number;
@@ -82,12 +85,16 @@ interface BulkAvailabilityModalProps {
 
 export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvailabilityModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [markUnlistedOos, setMarkUnlistedOos] = useState(true);
+  // Default is OFF so products missing from partial spreadsheets are preserved safely
+  const [markUnlistedOos, setMarkUnlistedOos] = useState(false);
   const [unlistedScope, setUnlistedScope] = useState<'MATCHED_BRANDS' | 'ALL_CATALOG'>('MATCHED_BRANDS');
 
   const [isLoadingPreview, setIsLoadingRunning] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
+
+  // Per-product unlist override: allows toggling unlist on/off for specific products
+  const [unlistedOosOverrides, setUnlistedOosOverrides] = useState<Record<string, boolean>>({});
 
   const [previewData, setPreviewData] = useState<{
     summary: SummaryData;
@@ -119,6 +126,8 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
 
     setIsLoadingRunning(true);
     setResultMessage(null);
+    setUnlistedOosOverrides({});
+
     try {
       const formData = new FormData();
       formData.append('action', 'preview');
@@ -149,6 +158,82 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
     }
   }
 
+  // Toggle unlist on/off with each product individually
+  function toggleProductUnlist(productId: string) {
+    setUnlistedOosOverrides((prev) => {
+      const targetProduct = previewData?.products.find((p) => p.productId === productId);
+      const currentVal =
+        prev[productId] !== undefined
+          ? prev[productId]
+          : Boolean(targetProduct?.isMarkedOos ?? markUnlistedOos);
+      return {
+        ...prev,
+        [productId]: !currentVal,
+      };
+    });
+  }
+
+  // Calculate live effective products incorporating individual unlist overrides
+  const effectiveProducts = useMemo(() => {
+    if (!previewData) return [];
+    return previewData.products.map((p) => {
+      if (!p.isUnlisted) return p;
+
+      const isMarkedOos =
+        unlistedOosOverrides[p.productId] !== undefined
+          ? unlistedOosOverrides[p.productId]
+          : Boolean(p.isMarkedOos ?? markUnlistedOos);
+
+      if (isMarkedOos) {
+        return {
+          ...p,
+          isMarkedOos: true,
+          activePowers: [],
+          activePowersCount: 0,
+          hasPlano: false,
+          hasRx: false,
+          addedPowers: [],
+          removedPowers: [...p.beforeActivePowers],
+          hasChanges: p.beforeActivePowersCount > 0 || p.beforeHasPlano,
+        };
+      } else {
+        return {
+          ...p,
+          isMarkedOos: false,
+          activePowers: [...p.beforeActivePowers],
+          activePowersCount: p.beforeActivePowersCount,
+          hasPlano: p.beforeHasPlano,
+          hasRx: p.beforeHasRx,
+          addedPowers: [],
+          removedPowers: [],
+          hasChanges: false,
+        };
+      }
+    });
+  }, [previewData, unlistedOosOverrides, markUnlistedOos]);
+
+  // Live dynamic KPI summary
+  const effectiveSummary = useMemo(() => {
+    if (!previewData) return null;
+    const totalActiveBefore = effectiveProducts.reduce((acc, p) => acc + p.beforeActivePowersCount, 0);
+    const totalActiveAfter = effectiveProducts.reduce((acc, p) => acc + p.activePowersCount, 0);
+    const totalPowersAdded = effectiveProducts.reduce((acc, p) => acc + p.addedPowers.length, 0);
+    const totalPowersRemoved = effectiveProducts.reduce((acc, p) => acc + p.removedPowers.length, 0);
+    const productsWithChangesCount = effectiveProducts.filter((p) => p.hasChanges).length;
+    const productsUnchangedCount = effectiveProducts.filter((p) => !p.hasChanges).length;
+
+    return {
+      ...previewData.summary,
+      totalActiveBefore,
+      totalActiveAfter,
+      netActiveChange: totalActiveAfter - totalActiveBefore,
+      totalPowersAdded,
+      totalPowersRemoved,
+      productsWithChangesCount,
+      productsUnchangedCount,
+    };
+  }, [previewData, effectiveProducts]);
+
   async function handleApplySync() {
     if (!previewData || !selectedFile) return;
     setIsSyncing(true);
@@ -156,10 +241,15 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
     setResultMessage(null);
 
     try {
+      const effectiveOosIds = effectiveProducts
+        .filter((p) => p.isUnlisted && p.isMarkedOos)
+        .map((p) => p.productId);
+
       const formData = new FormData();
       formData.append('action', 'apply');
       formData.append('markUnlistedOos', markUnlistedOos ? 'true' : 'false');
       formData.append('unlistedScope', unlistedScope);
+      formData.append('unlistedOosProductIds', JSON.stringify(effectiveOosIds));
       formData.append('file', selectedFile);
 
       const res = await fetch('/api/products/bulk-stock-update', {
@@ -203,10 +293,9 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
   }
 
   const filteredProducts = useMemo(() => {
-    if (!previewData) return [];
     const q = searchQuery.trim().toLowerCase();
 
-    return previewData.products.filter((p) => {
+    return effectiveProducts.filter((p) => {
       const matchBrand =
         selectedBrandFilter === 'ALL' ||
         (p.brandName || '').toLowerCase() === selectedBrandFilter.toLowerCase();
@@ -228,7 +317,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
       if (activeTab === 'UNLISTED') return p.isUnlisted;
       return true;
     });
-  }, [previewData, searchQuery, selectedBrandFilter, activeTab]);
+  }, [effectiveProducts, searchQuery, selectedBrandFilter, activeTab]);
 
   // Hook count and order is always consistent. Safe to conditionally render now.
   if (!isOpen) return null;
@@ -288,6 +377,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                       setSelectedFile(e.target.files[0]);
                       setPreviewData(null);
                       setResultMessage(null);
+                      setUnlistedOosOverrides({});
                     }
                   }}
                 />
@@ -329,7 +419,10 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                   <input
                     type="checkbox"
                     checked={markUnlistedOos}
-                    onChange={(e) => setMarkUnlistedOos(e.target.checked)}
+                    onChange={(e) => {
+                      setMarkUnlistedOos(e.target.checked);
+                      setUnlistedOosOverrides({});
+                    }}
                     className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 w-4 h-4"
                   />
                   <span>Mark unlisted products as Out of Stock in Shopify</span>
@@ -398,7 +491,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
           )}
 
           {/* PREVIEW CONTENT */}
-          {previewData && (
+          {previewData && effectiveSummary && (
             <div className="space-y-4">
               
               {/* BEFORE & AFTER KPI STAT CARDS */}
@@ -416,12 +509,12 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                 <div className="p-2.5 sm:p-3 bg-neutral-50 rounded-xl border border-neutral-200">
                   <div className="text-[9.5px] uppercase font-bold text-neutral-400">Products Impact</div>
                   <div className="text-base sm:text-xl font-black text-neutral-900 mt-0.5">
-                    {previewData.summary.totalProductsInPlan}
+                    {effectiveProducts.length}
                   </div>
                   <div className="text-[10px] text-neutral-600 font-semibold mt-0.5 truncate flex items-center gap-1">
-                    <span className="text-amber-600">{previewData.summary.productsWithChangesCount} changing</span>
+                    <span className="text-amber-600 font-bold">{effectiveSummary.productsWithChangesCount} changing</span>
                     <span>·</span>
-                    <span className="text-neutral-500">{previewData.summary.productsUnchangedCount} unchanged</span>
+                    <span className="text-neutral-500">{effectiveSummary.productsUnchangedCount} unchanged</span>
                   </div>
                 </div>
 
@@ -429,22 +522,22 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                   <div className="text-[9.5px] uppercase font-bold text-emerald-700">Active Diopters (Before ➔ After)</div>
                   <div className="text-sm sm:text-lg font-black text-emerald-800 mt-0.5 flex items-center gap-1.5 flex-wrap">
                     <span className="text-neutral-400 font-bold line-through text-xs sm:text-sm">
-                      {previewData.summary.totalActiveBefore.toLocaleString()}
+                      {effectiveSummary.totalActiveBefore.toLocaleString()}
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>{previewData.summary.totalActiveAfter.toLocaleString()}</span>
+                    <span>{effectiveSummary.totalActiveAfter.toLocaleString()}</span>
                   </div>
                   <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
-                    Net: {previewData.summary.netActiveChange >= 0 ? `+${previewData.summary.netActiveChange}` : previewData.summary.netActiveChange} diopters
+                    Net: {effectiveSummary.netActiveChange >= 0 ? `+${effectiveSummary.netActiveChange}` : effectiveSummary.netActiveChange} diopters
                   </div>
                 </div>
 
                 <div className="p-2.5 sm:p-3 bg-neutral-50 rounded-xl border border-neutral-200">
                   <div className="text-[9.5px] uppercase font-bold text-neutral-500">Diopter Diff Breakdown</div>
                   <div className="text-sm sm:text-base font-black mt-0.5 flex items-center gap-2">
-                    <span className="text-emerald-600">+{previewData.summary.totalPowersAdded} added</span>
+                    <span className="text-emerald-600">+{effectiveSummary.totalPowersAdded} added</span>
                     <span className="text-neutral-300">|</span>
-                    <span className="text-rose-600">-{previewData.summary.totalPowersRemoved} removed</span>
+                    <span className="text-rose-600">-{effectiveSummary.totalPowersRemoved} removed</span>
                   </div>
                   <div className="text-[10px] text-neutral-400 font-medium mt-0.5">
                     Storefront diopter pill toggles
@@ -489,7 +582,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                     }`}
                   >
-                    All ({previewData.products.length})
+                    All ({effectiveProducts.length})
                   </button>
                   <button
                     onClick={() => setActiveTab('CHANGED')}
@@ -499,7 +592,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
                     }`}
                   >
-                    <span>Changed ({previewData.summary.productsWithChangesCount})</span>
+                    <span>Changed ({effectiveSummary.productsWithChangesCount})</span>
                   </button>
                   <button
                     onClick={() => setActiveTab('UNCHANGED')}
@@ -509,7 +602,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                     }`}
                   >
-                    Unchanged ({previewData.summary.productsUnchangedCount})
+                    Unchanged ({effectiveSummary.productsUnchangedCount})
                   </button>
                   <button
                     onClick={() => setActiveTab('UNLISTED')}
@@ -519,7 +612,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                     }`}
                   >
-                    Unlisted OOS ({previewData.summary.unlistedProductsCount})
+                    Unlisted ({effectiveProducts.filter((p) => p.isUnlisted).length})
                   </button>
                   {previewData.unmatchedRows.length > 0 && (
                     <button
@@ -603,11 +696,21 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                                 </div>
                               </div>
 
-                              <div className="shrink-0">
+                              {/* Per-product unlist option / Status badge */}
+                              <div className="shrink-0 flex items-center gap-1.5">
                                 {p.isUnlisted ? (
-                                  <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-rose-100 text-rose-700 whitespace-nowrap">
-                                    ALL OOS (-{p.beforeActivePowersCount})
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleProductUnlist(p.productId)}
+                                    className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold transition flex items-center gap-1 shadow-2xs ${
+                                      p.isMarkedOos
+                                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                        : 'bg-neutral-100 text-neutral-600 border border-neutral-300 hover:bg-neutral-200'
+                                    }`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${p.isMarkedOos ? 'bg-rose-600' : 'bg-neutral-400'}`} />
+                                    <span>{p.isMarkedOos ? 'Unlist: ON (OOS)' : 'Unlist: OFF (Live)'}</span>
+                                  </button>
                                 ) : p.hasChanges ? (
                                   <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-100 text-amber-800 whitespace-nowrap border border-amber-200">
                                     CHANGING
@@ -629,7 +732,9 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                               <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
                               <div className="flex items-center gap-1.5">
                                 <span className="text-neutral-500 font-medium">After:</span>
-                                <span className="font-bold text-emerald-700">{p.activePowersCount} active</span>
+                                <span className={`font-bold ${p.isUnlisted && !p.isMarkedOos ? 'text-neutral-700' : 'text-emerald-700'}`}>
+                                  {p.activePowersCount} active
+                                </span>
                               </div>
                               {p.addedPowers.length > 0 && (
                                 <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">
@@ -639,6 +744,11 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                               {p.removedPowers.length > 0 && (
                                 <span className="text-[10px] font-bold text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">
                                   -{p.removedPowers.length}
+                                </span>
+                              )}
+                              {p.isUnlisted && !p.isMarkedOos && (
+                                <span className="text-[10px] font-medium text-neutral-500 bg-neutral-200/70 px-1.5 py-0.5 rounded">
+                                  Kept live
                                 </span>
                               )}
                             </div>
@@ -741,254 +851,273 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                   <div className="hidden md:block border border-neutral-200 rounded-xl overflow-hidden bg-white shadow-2xs">
                     <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
                       <table className="w-full text-left text-xs min-w-[760px]">
-                      <thead className="bg-neutral-100 text-neutral-600 font-bold sticky top-0 border-b border-neutral-200 z-10">
-                        <tr>
-                          <th className="py-2.5 px-3 sm:px-4">Product &amp; SKU</th>
-                          <th className="py-2.5 px-3 bg-neutral-200/50">BEFORE (Live on Shopify)</th>
-                          <th className="py-2.5 px-3 bg-emerald-100/40 text-emerald-950">AFTER (From Excel)</th>
-                          <th className="py-2.5 px-3">DIFFERENCE / DIFF</th>
-                          <th className="py-2.5 px-3 text-right">Details</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-100">
-                        {filteredProducts.length === 0 ? (
+                        <thead className="bg-neutral-100 text-neutral-600 font-bold sticky top-0 border-b border-neutral-200 z-10">
                           <tr>
-                            <td colSpan={5} className="py-8 text-center text-neutral-400">
-                              No products match your search or filter.
-                            </td>
+                            <th className="py-2.5 px-3 sm:px-4">Product &amp; SKU</th>
+                            <th className="py-2.5 px-3 bg-neutral-200/50">BEFORE (Live on Shopify)</th>
+                            <th className="py-2.5 px-3 bg-emerald-100/40 text-emerald-950">AFTER (From Excel)</th>
+                            <th className="py-2.5 px-3">DIFFERENCE / DIFF</th>
+                            <th className="py-2.5 px-3 text-right">Details</th>
                           </tr>
-                        ) : (
-                          filteredProducts.map((p) => {
-                            const isExpanded = expandedProductIds.has(p.productId);
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {filteredProducts.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="py-8 text-center text-neutral-400">
+                                No products match your search or filter.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredProducts.map((p) => {
+                              const isExpanded = expandedProductIds.has(p.productId);
 
-                            return (
-                              <React.Fragment key={p.productId}>
-                                <tr className={`hover:bg-neutral-50 transition ${p.hasChanges ? 'bg-amber-50/20' : ''}`}>
-                                  {/* Column 1: Title & SKU */}
-                                  <td className="py-2.5 px-3 sm:px-4 max-w-[220px]">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      {p.brandName && (
-                                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-200/70 text-neutral-700 rounded uppercase">
-                                          {p.brandName}
-                                        </span>
-                                      )}
-                                      <span className="font-semibold text-neutral-900 truncate">{p.titleEn}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400 font-mono">
-                                      <span>{p.sku}</span>
-                                      {p.shopifyProductId && (
-                                        <span className="text-neutral-500">#{p.shopifyProductId}</span>
-                                      )}
-                                    </div>
-                                  </td>
-
-                                  {/* Column 2: BEFORE */}
-                                  <td className="py-2.5 px-3 bg-neutral-50/70">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="px-1.5 py-0.5 font-bold text-[10px] rounded bg-neutral-200 text-neutral-800">
-                                        {p.beforeActivePowersCount} Active
-                                      </span>
-                                      <span className="text-[10px] text-neutral-400">
-                                        Plano: {p.beforeHasPlano ? 'Yes' : 'No'}
-                                      </span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1 mt-1 max-w-[180px]">
-                                      {p.beforeActivePowers.slice(0, 3).map((pow) => (
-                                        <span key={pow} className="px-1 py-0.2 text-[9px] font-mono bg-neutral-100 text-neutral-600 rounded">
-                                          {pow}
-                                        </span>
-                                      ))}
-                                      {p.beforeActivePowers.length > 3 && (
-                                        <span className="text-[9px] text-neutral-400 self-center">
-                                          +{p.beforeActivePowers.length - 3}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-
-                                  {/* Column 3: AFTER */}
-                                  <td className="py-2.5 px-3 bg-emerald-50/30">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="px-1.5 py-0.5 font-bold text-[10px] rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                        {p.activePowersCount} Active
-                                      </span>
-                                      <span className="text-[10px] text-emerald-700">
-                                        Plano: {p.hasPlano ? 'Yes' : 'No'}
-                                      </span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1 mt-1 max-w-[180px]">
-                                      {p.activePowers.slice(0, 3).map((pow) => (
-                                        <span key={pow} className="px-1 py-0.2 text-[9px] font-mono bg-emerald-100/70 text-emerald-800 rounded">
-                                          {pow}
-                                        </span>
-                                      ))}
-                                      {p.activePowers.length > 3 && (
-                                        <span className="text-[9px] text-emerald-600 self-center">
-                                          +{p.activePowers.length - 3}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-
-                                  {/* Column 4: DIFFERENCE */}
-                                  <td className="py-2.5 px-3">
-                                    {p.isUnlisted ? (
-                                      <span className="px-2 py-0.5 text-[9.5px] font-bold rounded-full bg-rose-100 text-rose-700 whitespace-nowrap">
-                                        All OOS (-{p.beforeActivePowersCount})
-                                      </span>
-                                    ) : !p.hasChanges ? (
-                                      <span className="px-2 py-0.5 text-[9.5px] font-medium rounded-full bg-neutral-100 text-neutral-500 whitespace-nowrap">
-                                        Unchanged
-                                      </span>
-                                    ) : (
-                                      <div className="space-y-1">
-                                        {p.addedPowers.length > 0 && (
-                                          <div className="flex items-center gap-1 flex-wrap">
-                                            <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100 px-1 rounded">
-                                              +{p.addedPowers.length} Added:
-                                            </span>
-                                            {p.addedPowers.slice(0, 3).map((pow) => (
-                                              <span key={pow} className="px-1 py-0.2 text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 rounded">
-                                                {pow}
-                                              </span>
-                                            ))}
-                                            {p.addedPowers.length > 3 && (
-                                              <span className="text-[9px] text-emerald-600">+{p.addedPowers.length - 3}</span>
-                                            )}
-                                          </div>
+                              return (
+                                <React.Fragment key={p.productId}>
+                                  <tr className={`hover:bg-neutral-50 transition ${p.hasChanges ? 'bg-amber-50/20' : ''}`}>
+                                    {/* Column 1: Title & SKU */}
+                                    <td className="py-2.5 px-3 sm:px-4 max-w-[220px]">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        {p.brandName && (
+                                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-neutral-200/70 text-neutral-700 rounded uppercase">
+                                            {p.brandName}
+                                          </span>
                                         )}
-                                        {p.removedPowers.length > 0 && (
-                                          <div className="flex items-center gap-1 flex-wrap">
-                                            <span className="text-[9.5px] font-bold text-rose-700 bg-rose-100 px-1 rounded">
-                                              -{p.removedPowers.length} Removed:
-                                            </span>
-                                            {p.removedPowers.slice(0, 3).map((pow) => (
-                                              <span key={pow} className="px-1 py-0.2 text-[9px] font-mono line-through bg-rose-100 text-rose-700 rounded">
-                                                {pow}
-                                              </span>
-                                            ))}
-                                            {p.removedPowers.length > 3 && (
-                                              <span className="text-[9px] text-rose-500">+{p.removedPowers.length - 3}</span>
-                                            )}
-                                          </div>
+                                        <span className="font-semibold text-neutral-900 truncate">{p.titleEn}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400 font-mono">
+                                        <span>{p.sku}</span>
+                                        {p.shopifyProductId && (
+                                          <span className="text-neutral-500">#{p.shopifyProductId}</span>
                                         )}
                                       </div>
-                                    )}
-                                  </td>
+                                    </td>
 
-                                  {/* Column 5: View toggle */}
-                                  <td className="py-2.5 px-3 text-right">
-                                    <button
-                                      onClick={() => toggleExpand(p.productId)}
-                                      className="p-1 rounded hover:bg-neutral-200 text-neutral-500 transition"
-                                      title="Toggle Before/After Grid"
-                                    >
-                                      {isExpanded ? (
-                                        <ChevronUp className="w-4 h-4" />
+                                    {/* Column 2: BEFORE */}
+                                    <td className="py-2.5 px-3 bg-neutral-50/70">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-1.5 py-0.5 font-bold text-[10px] rounded bg-neutral-200 text-neutral-800">
+                                          {p.beforeActivePowersCount} Active
+                                        </span>
+                                        <span className="text-[10px] text-neutral-400">
+                                          Plano: {p.beforeHasPlano ? 'Yes' : 'No'}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 mt-1 max-w-[180px]">
+                                        {p.beforeActivePowers.slice(0, 3).map((pow) => (
+                                          <span key={pow} className="px-1 py-0.2 text-[9px] font-mono bg-neutral-100 text-neutral-600 rounded">
+                                            {pow}
+                                          </span>
+                                        ))}
+                                        {p.beforeActivePowers.length > 3 && (
+                                          <span className="text-[9px] text-neutral-400 self-center">
+                                            +{p.beforeActivePowers.length - 3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Column 3: AFTER */}
+                                    <td className="py-2.5 px-3 bg-emerald-50/30">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`px-1.5 py-0.5 font-bold text-[10px] rounded ${
+                                          p.isUnlisted && !p.isMarkedOos
+                                            ? 'bg-neutral-200 text-neutral-800 border border-neutral-300'
+                                            : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        }`}>
+                                          {p.activePowersCount} Active
+                                        </span>
+                                        <span className="text-[10px] text-emerald-700">
+                                          Plano: {p.hasPlano ? 'Yes' : 'No'}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1 mt-1 max-w-[180px]">
+                                        {p.activePowers.slice(0, 3).map((pow) => (
+                                          <span key={pow} className="px-1 py-0.2 text-[9px] font-mono bg-emerald-100/70 text-emerald-800 rounded">
+                                            {pow}
+                                          </span>
+                                        ))}
+                                        {p.activePowers.length > 3 && (
+                                          <span className="text-[9px] text-emerald-600 self-center">
+                                            +{p.activePowers.length - 3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Column 4: DIFFERENCE / UNLIST TOGGLE */}
+                                    <td className="py-2.5 px-3">
+                                      {p.isUnlisted ? (
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleProductUnlist(p.productId)}
+                                            className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                                              p.isMarkedOos
+                                                ? 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                                                : 'bg-neutral-100 text-neutral-700 border border-neutral-300 hover:bg-neutral-200'
+                                            }`}
+                                            title={p.isMarkedOos ? 'Click to KEEP this product live in store' : 'Click to UNLIST this product (Mark OOS)'}
+                                          >
+                                            <span className={`w-2 h-2 rounded-full ${p.isMarkedOos ? 'bg-rose-600 animate-pulse' : 'bg-neutral-400'}`} />
+                                            <span>{p.isMarkedOos ? 'Unlist: ON (Mark OOS)' : 'Unlist: OFF (Keep Live)'}</span>
+                                          </button>
+                                          <span className="text-[10px] text-neutral-400">
+                                            {p.isMarkedOos ? `-${p.beforeActivePowersCount} powers` : 'Untouched'}
+                                          </span>
+                                        </div>
+                                      ) : !p.hasChanges ? (
+                                        <span className="px-2 py-0.5 text-[9.5px] font-medium rounded-full bg-neutral-100 text-neutral-500 whitespace-nowrap">
+                                          Unchanged
+                                        </span>
                                       ) : (
-                                        <ChevronDown className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                  </td>
-                                </tr>
-
-                                {/* EXPANDED BEFORE VS AFTER COMPARISON VIEW */}
-                                {isExpanded && (
-                                  <tr className="bg-neutral-50/80">
-                                    <td colSpan={5} className="py-3 px-4 sm:px-6 border-y border-neutral-200">
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {/* BEFORE GRID */}
-                                        <div className="p-3 bg-white rounded-xl border border-neutral-200 shadow-2xs">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-neutral-800">
-                                              BEFORE (Live on Shopify)
-                                            </span>
-                                            <span className="text-[10px] font-semibold text-neutral-500">
-                                              {p.beforeActivePowersCount} Active Powers · Plano: {p.beforeHasPlano ? 'Yes' : 'No'}
-                                            </span>
-                                          </div>
-                                          <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-neutral-50 rounded-lg">
-                                            {p.beforeActivePowers.length === 0 ? (
-                                              <span className="text-xs text-neutral-400 italic">No active diopters (All OOS)</span>
-                                            ) : (
-                                              p.beforeActivePowers.map((pow) => (
-                                                <span
-                                                  key={pow}
-                                                  className="px-2 py-0.5 text-[10px] font-mono bg-neutral-200/80 text-neutral-800 rounded border border-neutral-300"
-                                                >
+                                        <div className="space-y-1">
+                                          {p.addedPowers.length > 0 && (
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                              <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100 px-1 rounded">
+                                                +{p.addedPowers.length} Added:
+                                              </span>
+                                              {p.addedPowers.slice(0, 3).map((pow) => (
+                                                <span key={pow} className="px-1 py-0.2 text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 rounded">
                                                   {pow}
                                                 </span>
-                                              ))
-                                            )}
-                                          </div>
-                                        </div>
-
-                                        {/* AFTER GRID */}
-                                        <div className="p-3 bg-white rounded-xl border border-emerald-200 shadow-2xs">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-emerald-900">
-                                              AFTER (From Excel Update)
-                                            </span>
-                                            <span className="text-[10px] font-bold text-emerald-700">
-                                              {p.activePowersCount} Active Powers · Plano: {p.hasPlano ? 'Yes' : 'No'}
-                                            </span>
-                                          </div>
-                                          <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
-                                            {p.activePowers.length === 0 ? (
-                                              <span className="text-xs text-neutral-400 italic">No active diopters (All OOS)</span>
-                                            ) : (
-                                              p.activePowers.map((pow) => {
-                                                const isNewlyAdded = p.addedPowers.includes(pow);
-                                                return (
-                                                  <span
-                                                    key={pow}
-                                                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${
-                                                      isNewlyAdded
-                                                        ? 'bg-emerald-200 text-emerald-900 border border-emerald-400 shadow-2xs'
-                                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                                    }`}
-                                                  >
-                                                    {isNewlyAdded ? `+${pow}` : pow}
-                                                  </span>
-                                                );
-                                              })
-                                            )}
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      {/* DIFF CALLOUT IF ANY */}
-                                      {p.hasChanges && (
-                                        <div className="mt-2.5 p-2 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-between text-xs flex-wrap gap-2">
-                                          <div className="flex items-center gap-2">
-                                            <span className="font-bold text-amber-900">Exact Changes:</span>
-                                            {p.addedPowers.length > 0 && (
-                                              <span className="text-emerald-700 font-semibold">
-                                                +{p.addedPowers.length} Newly Enabled ({p.addedPowers.join(', ')})
+                                              ))}
+                                              {p.addedPowers.length > 3 && (
+                                                <span className="text-[9px] text-emerald-600">+{p.addedPowers.length - 3}</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          {p.removedPowers.length > 0 && (
+                                            <div className="flex items-center gap-1 flex-wrap">
+                                              <span className="text-[9.5px] font-bold text-rose-700 bg-rose-100 px-1 rounded">
+                                                -{p.removedPowers.length} Removed:
                                               </span>
-                                            )}
-                                            {p.removedPowers.length > 0 && (
-                                              <span className="text-rose-700 font-semibold">
-                                                -{p.removedPowers.length} Newly Disabled ({p.removedPowers.join(', ')})
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="text-[10px] text-amber-700">
-                                            Stock count will not be modified
-                                          </span>
+                                              {p.removedPowers.slice(0, 3).map((pow) => (
+                                                <span key={pow} className="px-1 py-0.2 text-[9px] font-mono line-through bg-rose-100 text-rose-700 rounded">
+                                                  {pow}
+                                                </span>
+                                              ))}
+                                              {p.removedPowers.length > 3 && (
+                                                <span className="text-[9px] text-rose-500">+{p.removedPowers.length - 3}</span>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                     </td>
+
+                                    {/* Column 5: View toggle */}
+                                    <td className="py-2.5 px-3 text-right">
+                                      <button
+                                        onClick={() => toggleExpand(p.productId)}
+                                        className="p-1 rounded hover:bg-neutral-200 text-neutral-500 transition"
+                                        title="Toggle Before/After Grid"
+                                      >
+                                        {isExpanded ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                    </td>
                                   </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
+
+                                  {/* EXPANDED BEFORE VS AFTER COMPARISON VIEW */}
+                                  {isExpanded && (
+                                    <tr className="bg-neutral-50/80">
+                                      <td colSpan={5} className="py-3 px-4 sm:px-6 border-y border-neutral-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          {/* BEFORE GRID */}
+                                          <div className="p-3 bg-white rounded-xl border border-neutral-200 shadow-2xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-xs font-bold text-neutral-800">
+                                                BEFORE (Live on Shopify)
+                                              </span>
+                                              <span className="text-[10px] font-semibold text-neutral-500">
+                                                {p.beforeActivePowersCount} Active Powers · Plano: {p.beforeHasPlano ? 'Yes' : 'No'}
+                                              </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-neutral-50 rounded-lg">
+                                              {p.beforeActivePowers.length === 0 ? (
+                                                <span className="text-xs text-neutral-400 italic">No active diopters (All OOS)</span>
+                                              ) : (
+                                                p.beforeActivePowers.map((pow) => (
+                                                  <span
+                                                    key={pow}
+                                                    className="px-2 py-0.5 text-[10px] font-mono bg-neutral-200/80 text-neutral-800 rounded border border-neutral-300"
+                                                  >
+                                                    {pow}
+                                                  </span>
+                                                ))
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* AFTER GRID */}
+                                          <div className="p-3 bg-white rounded-xl border border-emerald-200 shadow-2xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-xs font-bold text-emerald-900">
+                                                AFTER (From Excel Update)
+                                              </span>
+                                              <span className="text-[10px] font-bold text-emerald-700">
+                                                {p.activePowersCount} Active Powers · Plano: {p.hasPlano ? 'Yes' : 'No'}
+                                              </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                              {p.activePowers.length === 0 ? (
+                                                <span className="text-xs text-neutral-400 italic">No active diopters (All OOS)</span>
+                                              ) : (
+                                                p.activePowers.map((pow) => {
+                                                  const isNewlyAdded = p.addedPowers.includes(pow);
+                                                  return (
+                                                    <span
+                                                      key={pow}
+                                                      className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${
+                                                        isNewlyAdded
+                                                          ? 'bg-emerald-200 text-emerald-900 border border-emerald-400 shadow-2xs'
+                                                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                                      }`}
+                                                    >
+                                                      {isNewlyAdded ? `+${pow}` : pow}
+                                                    </span>
+                                                  );
+                                                })
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* DIFF CALLOUT IF ANY */}
+                                        {p.hasChanges && (
+                                          <div className="mt-2.5 p-2 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-between text-xs flex-wrap gap-2">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-bold text-amber-900">Exact Changes:</span>
+                                              {p.addedPowers.length > 0 && (
+                                                <span className="text-emerald-700 font-semibold">
+                                                  +{p.addedPowers.length} Newly Enabled ({p.addedPowers.join(', ')})
+                                                </span>
+                                              )}
+                                              {p.removedPowers.length > 0 && (
+                                                <span className="text-rose-700 font-semibold">
+                                                  -{p.removedPowers.length} Newly Disabled ({p.removedPowers.join(', ')})
+                                                </span>
+                                              )}
+                                            </div>
+                                            <span className="text-[10px] text-amber-700">
+                                              Stock count will not be modified
+                                            </span>
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
                 </>
               )}
             </div>

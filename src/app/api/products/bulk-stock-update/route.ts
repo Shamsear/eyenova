@@ -99,8 +99,18 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const action = (formData.get('action') as string) || 'preview';
-    const markUnlistedOos = formData.get('markUnlistedOos') !== 'false';
+    const markUnlistedOos = formData.get('markUnlistedOos') === 'true';
     const unlistedScope = (formData.get('unlistedScope') as string) || 'MATCHED_BRANDS'; // 'MATCHED_BRANDS' | 'ALL_CATALOG'
+    const unlistedOosProductIdsRaw = (formData.get('unlistedOosProductIds') as string) || '';
+    let unlistedOosProductIds: Set<string> | null = null;
+    if (unlistedOosProductIdsRaw) {
+      try {
+        const arr = JSON.parse(unlistedOosProductIdsRaw);
+        if (Array.isArray(arr)) unlistedOosProductIds = new Set(arr);
+      } catch {
+        unlistedOosProductIds = new Set(unlistedOosProductIdsRaw.split(',').map((s) => s.trim()).filter(Boolean));
+      }
+    }
     const uploadedFile = formData.get('file') as File | null;
 
     let fileBuffer: Buffer | null = null;
@@ -232,6 +242,7 @@ export async function POST(req: NextRequest) {
       brandName: string | null;
       productType: string | null;
       isUnlisted: boolean;
+      isMarkedOos: boolean;
       // Before state
       beforeActivePowers: string[];
       beforeActivePowersCount: number;
@@ -287,6 +298,7 @@ export async function POST(req: NextRequest) {
         brandName: entry.product.brandName,
         productType: entry.product.productType,
         isUnlisted: false,
+        isMarkedOos: false,
         beforeActivePowers,
         beforeActivePowersCount,
         beforeHasPlano,
@@ -306,50 +318,71 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Handle unlisted products
-    if (markUnlistedOos) {
-      for (const p of dbAllProducts) {
-        if (matchedProductIds.has(p.id)) continue;
+    for (const p of dbAllProducts) {
+      if (matchedProductIds.has(p.id)) continue;
 
-        const pBrand = p.brandName?.trim() || '';
-        const isMatchedBrand = detectedBrands.has(pBrand);
+      const pBrand = p.brandName?.trim() || '';
+      const isMatchedBrand = detectedBrands.has(pBrand);
 
-        // Include unlisted product if it belongs to a detected brand, or if user selected entire catalog
-        if (unlistedScope === 'ALL_CATALOG' || isMatchedBrand) {
-          const beforeActivePowers = p.availablePowers || [];
-          const beforeActivePowersCount = beforeActivePowers.length;
-          const beforeHasPlano = Boolean(p.hasPlanoOption || beforeActivePowers.includes('0.00'));
-          const beforeHasRx = Boolean(p.hasPrescription || beforeActivePowers.some((pow) => pow !== '0.00'));
+      // Include unlisted product if it belongs to a detected brand, or if user selected entire catalog
+      if (unlistedScope === 'ALL_CATALOG' || isMatchedBrand) {
+        const beforeActivePowers = p.availablePowers || [];
+        const beforeActivePowersCount = beforeActivePowers.length;
+        const beforeHasPlano = Boolean(p.hasPlanoOption || beforeActivePowers.includes('0.00'));
+        const beforeHasRx = Boolean(p.hasPrescription || beforeActivePowers.some((pow) => pow !== '0.00'));
 
-          const addedPowers: string[] = [];
-          const removedPowers = [...beforeActivePowers];
-          const unchangedPowers: string[] = [];
-          const hasChanges = beforeActivePowersCount > 0 || beforeHasPlano;
+        // Determine if this specific unlisted product should be marked Out of Stock:
+        // Priority 1: Per-product selection from client (unlistedOosProductIds)
+        // Priority 2: Global markUnlistedOos flag
+        const isMarkedOos =
+          unlistedOosProductIds !== null
+            ? unlistedOosProductIds.has(p.id)
+            : markUnlistedOos;
 
-          productsPlan.push({
-            productId: p.id,
-            shopifyProductId: p.shopifyProductId ? p.shopifyProductId.toString() : null,
-            titleEn: p.titleEn,
-            sku: p.sku,
-            brandName: p.brandName,
-            productType: p.productType,
-            isUnlisted: true,
-            beforeActivePowers,
-            beforeActivePowersCount,
-            beforeHasPlano,
-            beforeHasRx,
-            activePowers: [],
-            oosPowers: [...ALL_SPHERES],
-            activePowersCount: 0,
-            oosPowersCount: ALL_SPHERES.length,
-            hasPlano: false,
-            hasRx: false,
-            addedPowers,
-            removedPowers,
-            unchangedPowers,
-            hasChanges,
-            existingStockQty: p.stockQuantity || 0,
-          });
+        // If in APPLY action, skip unlisted products that are not marked OOS (they stay untouched!)
+        if (action === 'apply' && !isMarkedOos) {
+          continue;
         }
+
+        const activePowers = isMarkedOos ? [] : [...beforeActivePowers];
+        const oosPowers = isMarkedOos
+          ? [...ALL_SPHERES]
+          : ALL_SPHERES.filter((pow) => !beforeActivePowers.includes(pow));
+        const activePowersCount = activePowers.length;
+        const oosPowersCount = oosPowers.length;
+        const hasPlano = isMarkedOos ? false : beforeHasPlano;
+        const hasRx = isMarkedOos ? false : beforeHasRx;
+
+        const addedPowers: string[] = [];
+        const removedPowers = isMarkedOos ? [...beforeActivePowers] : [];
+        const unchangedPowers = isMarkedOos ? [] : [...beforeActivePowers];
+        const hasChanges = isMarkedOos ? (beforeActivePowersCount > 0 || beforeHasPlano) : false;
+
+        productsPlan.push({
+          productId: p.id,
+          shopifyProductId: p.shopifyProductId ? p.shopifyProductId.toString() : null,
+          titleEn: p.titleEn,
+          sku: p.sku,
+          brandName: p.brandName,
+          productType: p.productType,
+          isUnlisted: true,
+          isMarkedOos,
+          beforeActivePowers,
+          beforeActivePowersCount,
+          beforeHasPlano,
+          beforeHasRx,
+          activePowers,
+          oosPowers,
+          activePowersCount,
+          oosPowersCount,
+          hasPlano,
+          hasRx,
+          addedPowers,
+          removedPowers,
+          unchangedPowers,
+          hasChanges,
+          existingStockQty: p.stockQuantity || 0,
+        });
       }
     }
 

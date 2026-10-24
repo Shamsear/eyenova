@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Construct product availability plan
+    // 4. Construct product availability plan with Before & After comparisons
     const productsPlan: Array<{
       productId: string;
       shopifyProductId: string | null;
@@ -232,12 +232,23 @@ export async function POST(req: NextRequest) {
       brandName: string | null;
       productType: string | null;
       isUnlisted: boolean;
+      // Before state
+      beforeActivePowers: string[];
+      beforeActivePowersCount: number;
+      beforeHasPlano: boolean;
+      beforeHasRx: boolean;
+      // After state
       activePowers: string[];
       oosPowers: string[];
       activePowersCount: number;
       oosPowersCount: number;
       hasPlano: boolean;
       hasRx: boolean;
+      // Diff
+      addedPowers: string[];
+      removedPowers: string[];
+      unchangedPowers: string[];
+      hasChanges: boolean;
       existingStockQty: number;
     }> = [];
 
@@ -245,10 +256,28 @@ export async function POST(req: NextRequest) {
 
     for (const [id, entry] of productMap.entries()) {
       matchedProductIds.add(id);
+
+      const beforeActivePowers = entry.product.availablePowers || [];
+      const beforeActivePowersCount = beforeActivePowers.length;
+      const beforeHasPlano = Boolean(entry.product.hasPlanoOption || beforeActivePowers.includes('0.00'));
+      const beforeHasRx = Boolean(entry.product.hasPrescription || beforeActivePowers.some((p) => p !== '0.00'));
+
       const activeList = Array.from(entry.activePowers);
       const oosList = ALL_SPHERES.filter((p) => !entry.activePowers.has(p));
       const hasPlano = entry.activePowers.has('0.00');
       const hasRx = activeList.some((p) => p !== '0.00');
+
+      const beforeSet = new Set(beforeActivePowers);
+      const afterSet = entry.activePowers;
+
+      const addedPowers = activeList.filter((p) => !beforeSet.has(p));
+      const removedPowers = beforeActivePowers.filter((p) => !afterSet.has(p));
+      const unchangedPowers = activeList.filter((p) => beforeSet.has(p));
+      const hasChanges =
+        addedPowers.length > 0 ||
+        removedPowers.length > 0 ||
+        beforeHasPlano !== hasPlano ||
+        beforeHasRx !== hasRx;
 
       productsPlan.push({
         productId: entry.product.id,
@@ -258,12 +287,20 @@ export async function POST(req: NextRequest) {
         brandName: entry.product.brandName,
         productType: entry.product.productType,
         isUnlisted: false,
+        beforeActivePowers,
+        beforeActivePowersCount,
+        beforeHasPlano,
+        beforeHasRx,
         activePowers: activeList,
         oosPowers: oosList,
         activePowersCount: activeList.length,
         oosPowersCount: oosList.length,
         hasPlano,
         hasRx,
+        addedPowers,
+        removedPowers,
+        unchangedPowers,
+        hasChanges,
         existingStockQty: entry.product.stockQuantity || 0,
       });
     }
@@ -278,6 +315,16 @@ export async function POST(req: NextRequest) {
 
         // Include unlisted product if it belongs to a detected brand, or if user selected entire catalog
         if (unlistedScope === 'ALL_CATALOG' || isMatchedBrand) {
+          const beforeActivePowers = p.availablePowers || [];
+          const beforeActivePowersCount = beforeActivePowers.length;
+          const beforeHasPlano = Boolean(p.hasPlanoOption || beforeActivePowers.includes('0.00'));
+          const beforeHasRx = Boolean(p.hasPrescription || beforeActivePowers.some((pow) => pow !== '0.00'));
+
+          const addedPowers: string[] = [];
+          const removedPowers = [...beforeActivePowers];
+          const unchangedPowers: string[] = [];
+          const hasChanges = beforeActivePowersCount > 0 || beforeHasPlano;
+
           productsPlan.push({
             productId: p.id,
             shopifyProductId: p.shopifyProductId ? p.shopifyProductId.toString() : null,
@@ -286,12 +333,20 @@ export async function POST(req: NextRequest) {
             brandName: p.brandName,
             productType: p.productType,
             isUnlisted: true,
+            beforeActivePowers,
+            beforeActivePowersCount,
+            beforeHasPlano,
+            beforeHasRx,
             activePowers: [],
             oosPowers: [...ALL_SPHERES],
             activePowersCount: 0,
             oosPowersCount: ALL_SPHERES.length,
             hasPlano: false,
             hasRx: false,
+            addedPowers,
+            removedPowers,
+            unchangedPowers,
+            hasChanges,
             existingStockQty: p.stockQuantity || 0,
           });
         }
@@ -305,8 +360,13 @@ export async function POST(req: NextRequest) {
       return a.titleEn.localeCompare(b.titleEn);
     });
 
-    // Summary calculations
-    const totalActivePowers = productsPlan.reduce((acc, p) => acc + p.activePowersCount, 0);
+    // Summary calculations (Before vs After)
+    const totalActiveBefore = productsPlan.reduce((acc, p) => acc + p.beforeActivePowersCount, 0);
+    const totalActiveAfter = productsPlan.reduce((acc, p) => acc + p.activePowersCount, 0);
+    const totalPowersAdded = productsPlan.reduce((acc, p) => acc + p.addedPowers.length, 0);
+    const totalPowersRemoved = productsPlan.reduce((acc, p) => acc + p.removedPowers.length, 0);
+    const productsWithChangesCount = productsPlan.filter((p) => p.hasChanges).length;
+    const productsUnchangedCount = productsPlan.filter((p) => !p.hasChanges).length;
     const totalOosPowers = productsPlan.reduce((acc, p) => acc + p.oosPowersCount, 0);
 
     const summary = {
@@ -317,8 +377,15 @@ export async function POST(req: NextRequest) {
       unlistedProductsCount: productsPlan.filter((p) => p.isUnlisted).length,
       totalProductsInPlan: productsPlan.length,
       detectedBrands: Array.from(detectedBrands),
-      totalActiveDiopters: totalActivePowers,
+      totalActiveDiopters: totalActiveAfter,
       totalOosDiopters: totalOosPowers,
+      totalActiveBefore,
+      totalActiveAfter,
+      netActiveChange: totalActiveAfter - totalActiveBefore,
+      totalPowersAdded,
+      totalPowersRemoved,
+      productsWithChangesCount,
+      productsUnchangedCount,
     };
 
     // If PREVIEW action, return full preview data

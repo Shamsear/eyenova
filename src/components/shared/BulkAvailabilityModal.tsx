@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   X,
   Upload,
@@ -11,14 +11,14 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   Tag,
   FileText,
   ArrowRight,
   Plus,
   Minus,
-  ToggleLeft,
-  ToggleRight,
 } from 'lucide-react';
 
 interface ProductPlanItem {
@@ -106,6 +106,8 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
   const [selectedBrandFilter, setSelectedBrandFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState<'ALL' | 'CHANGED' | 'UNCHANGED' | 'MATCHED' | 'UNLISTED' | 'UNMATCHED'>('ALL');
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   const [resultMessage, setResultMessage] = useState<{
     type: 'success' | 'error';
@@ -318,6 +320,20 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
       return true;
     });
   }, [effectiveProducts, searchQuery, selectedBrandFilter, activeTab]);
+
+  // Reset to page 1 on filter, tab, or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedBrandFilter, activeTab]);
+
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, safeCurrentPage, pageSize]);
 
   // Hook count and order is always consistent. Safe to conditionally render now.
   if (!isOpen) return null;
@@ -665,7 +681,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         No products match your search or filter.
                       </div>
                     ) : (
-                      filteredProducts.map((p) => {
+                      paginatedProducts.map((p) => {
                         const isExpanded = expandedProductIds.has(p.productId);
 
                         return (
@@ -845,6 +861,35 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         );
                       })
                     )}
+
+                    {/* MOBILE PAGINATION BAR */}
+                    {totalItems > 0 && totalPages > 1 && (
+                      <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-neutral-200 text-xs shadow-2xs">
+                        <button
+                          type="button"
+                          disabled={safeCurrentPage <= 1}
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          className="px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-neutral-700 font-bold hover:bg-neutral-100 disabled:opacity-40 transition flex items-center gap-1"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>Prev</span>
+                        </button>
+
+                        <span className="text-[11px] font-bold text-neutral-600">
+                          Page {safeCurrentPage} of {totalPages} ({totalItems} items)
+                        </span>
+
+                        <button
+                          type="button"
+                          disabled={safeCurrentPage >= totalPages}
+                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          className="px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-neutral-700 font-bold hover:bg-neutral-100 disabled:opacity-40 transition flex items-center gap-1"
+                        >
+                          <span>Next</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* DESKTOP/TABLET VIEW (TABLE on >= md screens with Before & After) */}
@@ -868,7 +913,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                               </td>
                             </tr>
                           ) : (
-                            filteredProducts.map((p) => {
+                            paginatedProducts.map((p) => {
                               const isExpanded = expandedProductIds.has(p.productId);
 
                               return (
@@ -1117,6 +1162,98 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                         </tbody>
                       </table>
                     </div>
+
+                    {/* DESKTOP PAGINATION BAR */}
+                    {totalItems > 0 && (
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-neutral-50 border-t border-neutral-200 text-xs">
+                        {/* Left: Showing X to Y of Z */}
+                        <div className="flex items-center gap-2 text-neutral-600">
+                          <span>
+                            Showing{' '}
+                            <strong className="font-bold text-neutral-900">
+                              {(safeCurrentPage - 1) * pageSize + 1}
+                            </strong>{' '}
+                            to{' '}
+                            <strong className="font-bold text-neutral-900">
+                              {Math.min(safeCurrentPage * pageSize, totalItems)}
+                            </strong>{' '}
+                            of <strong className="font-bold text-neutral-900">{totalItems}</strong> products
+                          </span>
+
+                          <div className="flex items-center gap-1.5 ml-3 pl-3 border-l border-neutral-200">
+                            <span className="text-neutral-400">Rows:</span>
+                            <select
+                              value={pageSize}
+                              onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setCurrentPage(1);
+                              }}
+                              className="bg-white border border-neutral-300 rounded px-1.5 py-0.5 text-xs text-neutral-700 font-semibold focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                            >
+                              <option value={10}>10</option>
+                              <option value={20}>20</option>
+                              <option value={50}>50</option>
+                              <option value={100}>100</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Right: Page Buttons */}
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={safeCurrentPage <= 1}
+                              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                              className="px-2.5 py-1 rounded-lg border border-neutral-300 bg-white text-neutral-700 font-medium hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-white transition flex items-center gap-1"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                              <span>Prev</span>
+                            </button>
+
+                            <div className="flex items-center gap-1 mx-1">
+                              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum: number;
+                                if (totalPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (safeCurrentPage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (safeCurrentPage >= totalPages - 2) {
+                                  pageNum = totalPages - 4 + i;
+                                } else {
+                                  pageNum = safeCurrentPage - 2 + i;
+                                }
+
+                                return (
+                                  <button
+                                    key={pageNum}
+                                    type="button"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`w-7 h-7 rounded-lg text-xs font-bold transition flex items-center justify-center ${
+                                      safeCurrentPage === pageNum
+                                        ? 'bg-neutral-900 text-white shadow-2xs'
+                                        : 'bg-white border border-neutral-200 text-neutral-700 hover:bg-neutral-100'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={safeCurrentPage >= totalPages}
+                              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                              className="px-2.5 py-1 rounded-lg border border-neutral-300 bg-white text-neutral-700 font-medium hover:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-white transition flex items-center gap-1"
+                            >
+                              <span>Next</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

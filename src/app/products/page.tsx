@@ -26,8 +26,10 @@ import {
   AlertCircle,
   DollarSign,
   Sparkles,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
+import { BulkAvailabilityModal } from '@/components/shared/BulkAvailabilityModal';
 
 const CATEGORY_LABEL_MAP: Record<string, string> = {
   COLORED_CONTACT_LENSES: 'Colored Lenses',
@@ -71,6 +73,7 @@ export default function ProductsPage() {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   // Inspector / Editor Modal State
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
@@ -689,28 +692,24 @@ export default function ProductsPage() {
     return list;
   }, [availableBrands, newBrandName]);
 
-  useEffect(() => {
-    let ignore = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        params.set('limit', '500');
+  async function fetchProducts() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', '500');
 
-        const res = await fetch(`/api/products?${params.toString()}`);
-        const data = await res.json();
-        if (!ignore && data.products) setProducts(data.products);
-      } catch (err) {
-        console.error('Error loading products:', err);
-      } finally {
-        if (!ignore) setLoading(false);
-      }
+      const res = await fetch(`/api/products?${params.toString()}`);
+      const data = await res.json();
+      if (data.products) setProducts(data.products);
+    } catch (err) {
+      console.error('Error loading products:', err);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    load();
-    return () => {
-      ignore = true;
-    };
+  useEffect(() => {
+    fetchProducts();
   }, []);
 
   const columns: Column<ProductItem>[] = [
@@ -825,6 +824,11 @@ export default function ProductsPage() {
             label: 'New Product',
             onClick: () => setIsCreateModalOpen(true),
             icon: Plus,
+          }}
+          secondaryAction={{
+            label: 'Bulk Excel Availability',
+            onClick: () => setIsBulkModalOpen(true),
+            icon: FileSpreadsheet,
           }}
         />
 
@@ -1802,6 +1806,12 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      <BulkAvailabilityModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={fetchProducts}
+      />
     </Shell>
   );
 }

@@ -12,7 +12,9 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { BulkAvailabilityModal } from '@/components/shared/BulkAvailabilityModal';
 
 interface ProductEntry {
   id: string;
@@ -61,6 +63,7 @@ export default function OnlineStockPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Loading catalog...');
   const [mobileTab, setMobileTab] = useState<'PRODUCTS' | 'MATRIX'>('PRODUCTS');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
   // Load products list
   async function loadProducts() {
@@ -294,6 +297,14 @@ export default function OnlineStockPage() {
           </div>
 
           <div className="flex items-center flex-wrap gap-2 shrink-0 justify-start sm:justify-end min-w-0">
+            <button
+              onClick={() => setIsBulkModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded transition border border-emerald-300 cursor-pointer whitespace-nowrap shadow-xs"
+            >
+              <FileSpreadsheet size={13} className="text-emerald-600" />
+              <span className="truncate">Bulk Excel Shopify Update</span>
+            </button>
+
             <button
               onClick={loadProducts}
               disabled={isLoading}
@@ -650,6 +661,12 @@ export default function OnlineStockPage() {
           </div>
         </div>
       </div>
+
+      <BulkAvailabilityModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={loadProducts}
+      />
     </Shell>
   );
 }

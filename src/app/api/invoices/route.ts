@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { formatQatarDate, formatQatarTime } from '@/lib/utils';
 import { ReceiptPayload } from '@/lib/types';
+import { cancelOrRefundShopifyOrder } from '@/lib/shopify';
 
 export async function GET(req: NextRequest) {
   try {
@@ -171,6 +172,15 @@ export async function POST(req: NextRequest) {
 
       return updatedInvoice;
     });
+
+    // If the invoice is linked to a Shopify order, push cancellation/refund to Shopify Admin API
+    if (result && result.orderId && (result.orderId.startsWith('ORD-SH-') || result.orderId.startsWith('SH-'))) {
+      try {
+        await cancelOrRefundShopifyOrder(result.orderId, reason || 'customer');
+      } catch (err) {
+        console.error('[Invoices API] Shopify auto-cancel failed:', err);
+      }
+    }
 
     return NextResponse.json({ success: true, invoice: result });
   } catch (error: any) {

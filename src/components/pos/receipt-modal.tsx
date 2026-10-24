@@ -50,8 +50,10 @@ export function ReceiptModal() {
         </div>
 
         {/* 80mm Thermal Receipt Preview Canvas */}
-        <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-stone-100 flex justify-center">
-          <ThermalReceiptBill data={completedReceipt} />
+        <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-stone-100">
+          <div className="flex justify-center items-start min-h-full">
+            <ThermalReceiptBill data={completedReceipt} />
+          </div>
         </div>
 
         {/* Modal Actions */}

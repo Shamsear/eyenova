@@ -431,7 +431,7 @@ export default function InvoicesPage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
             className={`bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col h-[92vh] max-h-[92vh] my-auto shadow-2xl transition-all duration-200 ${
-              billPreviewMode === 'A4' ? 'w-full max-w-4xl' : 'w-full max-w-md'
+              billPreviewMode === 'A4' ? 'w-full max-w-4xl' : 'w-full max-w-xl'
             }`}
           >
             {/* Header */}
@@ -482,12 +482,14 @@ export default function InvoicesPage() {
             </div>
 
             {/* Bill Preview Area */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto p-3 sm:p-6 bg-stone-100 flex justify-center">
-              {billPreviewMode === 'A4' ? (
-                <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
-              ) : (
-                <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
-              )}
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 bg-stone-100">
+              <div className="flex justify-center items-start min-h-full">
+                {billPreviewMode === 'A4' ? (
+                  <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
+                ) : (
+                  <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
+                )}
+              </div>
             </div>
 
             {/* Modal Actions */}

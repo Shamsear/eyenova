@@ -21,7 +21,7 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
 
   return (
     <div
-      className={`bg-white rounded-lg border border-stone-200 shadow-sm p-4 sm:p-8 w-full max-w-3xl mx-auto text-stone-800 font-sans leading-normal overflow-hidden ${className}`}
+      className={`bg-white rounded-lg border border-stone-200 shadow-sm p-4 sm:p-8 w-full max-w-3xl mx-auto text-stone-800 font-sans leading-normal ${className}`}
       dir="ltr"
     >
       {/* 1. Header Section */}

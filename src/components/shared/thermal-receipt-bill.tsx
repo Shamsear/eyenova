@@ -101,6 +101,14 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
             {data.date} {data.time}
           </span>
         </div>
+        {data.status && (
+          <div className="flex justify-between">
+            <span className="text-stone-600">الحالة / Status:</span>
+            <span className="font-bold text-stone-900 font-mono text-[9.5px]">
+              {data.status.replace(/_/g, ' ')}
+            </span>
+          </div>
+        )}
         {data.orderNumber && (
           <div className="flex justify-between">
             <span className="text-stone-600">الطلب / Order #:</span>

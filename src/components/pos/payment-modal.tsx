@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePosStore } from '@/stores/pos-store';
 import { useSessionStore } from '@/stores/session-store';
-import { formatQar, formatOpticalSpecs } from '@/lib/utils';
+import { formatQar, formatOpticalSpecs, formatInvoiceNumber } from '@/lib/utils';
 import {
   X,
   CreditCard,
@@ -137,7 +137,7 @@ export function PaymentModal() {
         });
       } catch {}
 
-      showToast('Payment Completed', `Invoice #${data.invoice.invoiceNumber} issued`, true);
+      showToast('Payment Completed', `Invoice ${formatInvoiceNumber(data.invoice.invoiceNumber)} issued`, true);
       setPaymentModalOpen(false);
       setReceiptModalOpen(true, data.receipt);
       clearCart();

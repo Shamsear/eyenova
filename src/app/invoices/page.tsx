@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
-import { formatQar, formatQatarDateTime } from '@/lib/utils';
+import { formatQar, formatQatarDateTime, formatInvoiceNumber } from '@/lib/utils';
 import { downloadReceiptPdf, downloadA4InvoicePdf } from '@/lib/receipt-pdf';
 import { ReceiptPayload } from '@/lib/types';
 import { useSessionStore } from '@/stores/session-store';
@@ -64,6 +64,7 @@ const STATUS_FILTERS = [
   { id: 'ALL', label: 'All Invoices' },
   { id: 'PAID', label: 'Paid' },
   { id: 'ISSUED', label: 'Issued' },
+  { id: 'PARTIALLY_REFUNDED', label: 'Partially Refunded' },
   { id: 'REFUNDED', label: 'Refunded' },
   { id: 'CANCELLED', label: 'Cancelled' },
 ];
@@ -73,6 +74,7 @@ export function statusToVariant(status: string): StatusVariant {
     case 'PAID':
     case 'ISSUED':
       return 'success';
+    case 'PARTIALLY_REFUNDED':
     case 'REFUNDED':
       return 'warning';
     case 'CANCELLED':
@@ -162,6 +164,7 @@ export default function InvoicesPage() {
     return {
       invoiceNumber: inv.invoiceNumber,
       orderNumber: inv.orderNumber,
+      status: inv.status,
       date: dt.toLocaleDateString('en-GB'),
       time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       storeNameEn: companyProfile?.nameEn || store?.name || 'EyeNova Optical - 02 Mall, Al Kheesa',
@@ -422,12 +425,12 @@ export default function InvoicesPage() {
             {/* Invoice Receipt Bill Modal (Same UI copy as POS & EyeNovaBilling) */}
       {/* Invoice Receipt Bill Modal */}
       {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className={`bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col max-h-[94vh] shadow-2xl transition-all duration-200 ${
+            className={`bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col h-[92vh] max-h-[92vh] my-auto shadow-2xl transition-all duration-200 ${
               billPreviewMode === 'A4' ? 'w-full max-w-4xl' : 'w-full max-w-md'
             }`}
           >
@@ -436,17 +439,17 @@ export default function InvoicesPage() {
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
                 <h3 className="font-semibold text-xs text-stone-900 truncate">
-                  Invoice #{selectedInvoice.invoiceNumber}
+                  Invoice {formatInvoiceNumber(selectedInvoice.invoiceNumber)}
                 </h3>
                 <StatusIndicator status={selectedInvoice.status} variant={statusToVariant(selectedInvoice.status)} />
               </div>
 
               {/* View Mode Toggle: A4 vs 80mm */}
-              <div className="flex items-center bg-stone-200/80 p-0.5 rounded-lg border border-stone-300/70 text-[11px] font-medium">
+              <div className="flex items-center bg-stone-200/80 p-0.5 rounded-lg border border-stone-300/70 text-[11px] font-medium shrink-0">
                 <button
                   type="button"
                   onClick={() => setBillPreviewMode('A4')}
-                  className={`px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                     billPreviewMode === 'A4'
                       ? 'bg-white text-stone-900 font-semibold shadow-xs'
                       : 'text-stone-600 hover:text-stone-900'
@@ -458,7 +461,7 @@ export default function InvoicesPage() {
                 <button
                   type="button"
                   onClick={() => setBillPreviewMode('80MM')}
-                  className={`px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2.5 sm:px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
                     billPreviewMode === '80MM'
                       ? 'bg-white text-stone-900 font-semibold shadow-xs'
                       : 'text-stone-600 hover:text-stone-900'
@@ -479,7 +482,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Bill Preview Area */}
-            <div className="p-4 sm:p-6 overflow-y-auto bg-stone-100 flex justify-center">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto p-3 sm:p-6 bg-stone-100 flex justify-center">
               {billPreviewMode === 'A4' ? (
                 <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
               ) : (
@@ -489,7 +492,7 @@ export default function InvoicesPage() {
 
             {/* Modal Actions */}
             <div className="p-3 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingInvoice(selectedInvoice)}
@@ -516,7 +519,7 @@ export default function InvoicesPage() {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-3.5 py-1.5 bg-stone-900 text-stone-50 rounded-md text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="px-3.5 py-1.5 bg-stone-900 text-stone-50 rounded-md text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs ml-auto"
               >
                 <Printer size={13} /> Print / طباعة (Ctrl+P)
               </button>
@@ -527,11 +530,11 @@ export default function InvoicesPage() {
 
       {/* Refund Confirmation Modal (Replacing prompt()) */}
       {refundModalInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl border border-stone-200 w-full max-w-sm overflow-hidden p-4 space-y-3 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-xl border border-stone-200 w-full max-w-sm overflow-hidden p-4 space-y-3 shadow-xl my-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-medium text-stone-900">
-                Refund Invoice #{refundModalInvoice.invoiceNumber}
+                Refund Invoice {formatInvoiceNumber(refundModalInvoice.invoiceNumber)}
               </h3>
               <button
                 onClick={() => setRefundModalInvoice(null)}

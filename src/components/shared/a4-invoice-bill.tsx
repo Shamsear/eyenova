@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ReceiptPayload } from '@/lib/types';
-import { formatQar } from '@/lib/utils';
+import { formatQar, getInvoiceStatusDisplay } from '@/lib/utils';
 
 interface A4InvoiceBillProps {
   data: ReceiptPayload;
@@ -17,10 +17,11 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
   const phone = data.phone || '+974 6633 7371';
   const cr = data.crNumber || '';
   const website = data.website || 'eyenova.com.qa';
+  const statusDisplay = getInvoiceStatusDisplay(data.status);
 
   return (
     <div
-      className={`bg-white rounded-lg border border-stone-200 shadow-sm p-6 sm:p-8 max-w-3xl mx-auto text-stone-800 font-sans leading-normal ${className}`}
+      className={`bg-white rounded-lg border border-stone-200 shadow-sm p-4 sm:p-8 w-full max-w-3xl mx-auto text-stone-800 font-sans leading-normal overflow-hidden ${className}`}
       dir="ltr"
     >
       {/* 1. Header Section */}
@@ -67,10 +68,10 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
               <span className="text-stone-500">Date / التاريخ:</span>
               <span className="font-mono text-stone-700">{data.date} {data.time}</span>
             </div>
-            <div className="flex sm:justify-end gap-2">
+            <div className="flex sm:justify-end gap-2 items-center">
               <span className="text-stone-500">Status / الحالة:</span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                PAID / مدفوعة
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusDisplay.badgeClasses}`}>
+                {statusDisplay.fullBadgeText}
               </span>
             </div>
           </div>
@@ -141,8 +142,8 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
       </div>
 
       {/* 3. Items Table */}
-      <div className="border border-stone-200 rounded-lg overflow-hidden my-5">
-        <table className="w-full text-left text-xs border-collapse">
+      <div className="border border-stone-200 rounded-lg overflow-x-auto my-5">
+        <table className="w-full min-w-[500px] text-left text-xs border-collapse">
           <thead>
             <tr className="bg-stone-900 text-stone-50 uppercase text-[10px] tracking-wider font-semibold">
               <th className="py-2.5 px-3 text-center w-10">#</th>
@@ -201,9 +202,9 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
             </div>
           )}
 
-          <div className="p-2.5 bg-emerald-50/60 rounded border border-emerald-200/80 text-[11px] text-emerald-800 flex items-center justify-between">
+          <div className={`p-2.5 rounded border text-[11px] flex items-center justify-between ${statusDisplay.boxClasses}`}>
             <span className="font-semibold">Payment Status / حالة السداد:</span>
-            <span className="font-mono font-bold">PAID IN FULL / مسدد بالكامل</span>
+            <span className="font-mono font-bold">{statusDisplay.paymentStatusText}</span>
           </div>
         </div>
 

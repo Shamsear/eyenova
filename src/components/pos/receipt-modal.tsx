@@ -6,6 +6,7 @@ import { downloadReceiptPdf, downloadA4InvoicePdf } from '@/lib/receipt-pdf';
 import { Printer, Download, FileText, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ThermalReceiptBill } from '@/components/shared/thermal-receipt-bill';
+import { formatInvoiceNumber } from '@/lib/utils';
 
 export function ReceiptModal() {
   const { isReceiptModalOpen, completedReceipt, setReceiptModalOpen } = usePosStore();
@@ -25,19 +26,19 @@ export function ReceiptModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] shadow-xl"
+        className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] my-auto shadow-xl"
       >
         {/* Header */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
             <h2 className="font-medium text-xs text-stone-900 truncate">
-              Receipt / فاتورة #{completedReceipt.invoiceNumber}
+              Receipt / فاتورة {formatInvoiceNumber(completedReceipt.invoiceNumber)}
             </h2>
           </div>
           <button
@@ -49,7 +50,7 @@ export function ReceiptModal() {
         </div>
 
         {/* 80mm Thermal Receipt Preview Canvas */}
-        <div className="p-4 overflow-y-auto bg-stone-100 flex justify-center">
+        <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-stone-100 flex justify-center">
           <ThermalReceiptBill data={completedReceipt} />
         </div>
 

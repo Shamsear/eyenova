@@ -54,6 +54,87 @@ export function formatQatarTime(date: Date | string | null | undefined): string 
   }).format(d);
 }
 
+/** Formats an invoice number for display with a single # prefix, preventing double hashes (e.g., ##1019 -> #1019) */
+export function formatInvoiceNumber(invNum: string | null | undefined): string {
+  if (!invNum) return '';
+  const trimmed = invNum.trim();
+  // Strip any leading # characters first, then prepend a single #
+  const cleaned = trimmed.replace(/^#+/, '');
+  return cleaned ? `#${cleaned}` : '';
+}
+
+export interface InvoiceStatusDisplay {
+  labelEn: string;
+  labelAr: string;
+  fullBadgeText: string;
+  paymentStatusText: string;
+  badgeClasses: string;
+  boxClasses: string;
+}
+
+export function getInvoiceStatusDisplay(status?: string): InvoiceStatusDisplay {
+  const s = (status || 'PAID').toUpperCase();
+  if (s === 'PARTIALLY_REFUNDED') {
+    return {
+      labelEn: 'PARTIALLY REFUNDED',
+      labelAr: 'مسترد جزئياً',
+      fullBadgeText: 'PARTIALLY REFUNDED / مسترد جزئياً',
+      paymentStatusText: 'PARTIALLY REFUNDED / مسترد جزئياً',
+      badgeClasses: 'bg-amber-50 text-amber-700 border-amber-200',
+      boxClasses: 'bg-amber-50/70 border-amber-200 text-amber-800',
+    };
+  }
+  if (s === 'REFUNDED') {
+    return {
+      labelEn: 'REFUNDED',
+      labelAr: 'مسترد بالكامل',
+      fullBadgeText: 'REFUNDED / مسترد بالكامل',
+      paymentStatusText: 'REFUNDED / مسترد بالكامل',
+      badgeClasses: 'bg-orange-50 text-orange-700 border-orange-200',
+      boxClasses: 'bg-orange-50/70 border-orange-200 text-orange-800',
+    };
+  }
+  if (s === 'CANCELLED' || s === 'VOID') {
+    return {
+      labelEn: 'CANCELLED',
+      labelAr: 'ملغاة',
+      fullBadgeText: 'CANCELLED / ملغاة',
+      paymentStatusText: 'CANCELLED / ملغاة',
+      badgeClasses: 'bg-rose-50 text-rose-700 border-rose-200',
+      boxClasses: 'bg-rose-50/70 border-rose-200 text-rose-800',
+    };
+  }
+  if (s === 'PARTIALLY_PAID') {
+    return {
+      labelEn: 'PARTIALLY PAID',
+      labelAr: 'مدفوع جزئياً',
+      fullBadgeText: 'PARTIALLY PAID / مدفوع جزئياً',
+      paymentStatusText: 'PARTIALLY PAID / مدفوع جزئياً',
+      badgeClasses: 'bg-blue-50 text-blue-700 border-blue-200',
+      boxClasses: 'bg-blue-50/70 border-blue-200 text-blue-800',
+    };
+  }
+  if (s === 'PENDING' || s === 'UNPAID') {
+    return {
+      labelEn: 'PENDING',
+      labelAr: 'معلق',
+      fullBadgeText: 'PENDING / معلق',
+      paymentStatusText: 'PENDING PAYMENT / بانتظار الدفع',
+      badgeClasses: 'bg-stone-100 text-stone-700 border-stone-200',
+      boxClasses: 'bg-stone-50 border-stone-200 text-stone-700',
+    };
+  }
+  // Default: PAID / ISSUED
+  return {
+    labelEn: 'PAID',
+    labelAr: 'مدفوعة',
+    fullBadgeText: 'PAID / مدفوعة',
+    paymentStatusText: 'PAID IN FULL / مسدد بالكامل',
+    badgeClasses: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    boxClasses: 'bg-emerald-50/60 border-emerald-200/80 text-emerald-800',
+  };
+}
+
 export const STANDARD_POWERS: string[] = [
   '0.00',
   '-0.25', '-0.50', '-0.75', '-1.00', '-1.25', '-1.50', '-1.75', '-2.00',

@@ -245,6 +245,7 @@ export async function POST(req: NextRequest) {
     const receipt: ReceiptPayload = {
       invoiceNumber: invoice.invoiceNumber,
       orderNumber: order.orderNumber,
+      status: invoice.status || 'PAID',
       date: formatQatarDate(now),
       time: formatQatarTime(now),
       storeNameEn: company?.nameEn || 'EyeNova Optical - 02 Mall, Al Kheesa',

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, Save, Loader2, AlertCircle, ShoppingBag, User, CreditCard, DollarSign } from 'lucide-react';
-import { formatQar } from '@/lib/utils';
+import { formatQar, formatInvoiceNumber } from '@/lib/utils';
 
 export interface InvoiceEditData {
   id: string;
@@ -148,15 +148,15 @@ export function EditInvoiceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-      <div className="bg-white rounded-xl border border-stone-200 shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden text-stone-800">
+    <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto animate-in fade-in duration-150">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-2xl w-full max-w-3xl max-h-[92vh] my-auto flex flex-col overflow-hidden text-stone-800">
         {/* Header */}
         <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
             <div>
               <h2 className="text-sm font-bold text-stone-900">
-                Edit Invoice / تعديل الفاتورة #{invoice.invoiceNumber}
+                Edit Invoice / تعديل الفاتورة {formatInvoiceNumber(invoice.invoiceNumber)}
               </h2>
               <p className="text-[11px] text-stone-500">
                 Order Ref: <span className="font-mono">{invoice.orderNumber}</span>
@@ -173,7 +173,7 @@ export function EditInvoiceModal({
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0 text-rose-600" />

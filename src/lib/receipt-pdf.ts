@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { ReceiptPayload } from './types';
 import { LOGO_BASE64 } from './logo-base64';
+import { getInvoiceStatusDisplay } from './utils';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -503,25 +504,46 @@ async function renderA4ToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement
   }
 
   // Status Badge
+  const statusInfo = getInvoiceStatusDisplay(data.status);
+  const stUpper = (data.status || 'PAID').toUpperCase();
+
   ctx.textAlign = 'right';
   ctx.fillStyle = '#64748b';
   ctx.fillText('Status / الحالة:', R - 130, metaY);
 
-  const statusBadgeW = 120;
+  const statusBadgeW = 160;
   const statusBadgeH = 24;
   const statusBadgeX = R - statusBadgeW;
   const statusBadgeY = metaY - 3;
-  ctx.fillStyle = '#ecfdf5';
+
+  let badgeBg = '#ecfdf5';
+  let badgeBorder = '#a7f3d0';
+  let badgeText = '#047857';
+  if (stUpper === 'PARTIALLY_REFUNDED') {
+    badgeBg = '#fffbeb';
+    badgeBorder = '#fde68a';
+    badgeText = '#b45309';
+  } else if (stUpper === 'REFUNDED') {
+    badgeBg = '#fff7ed';
+    badgeBorder = '#fed7aa';
+    badgeText = '#c2410c';
+  } else if (stUpper === 'CANCELLED' || stUpper === 'VOID') {
+    badgeBg = '#fef2f2';
+    badgeBorder = '#fecaca';
+    badgeText = '#b91c1c';
+  }
+
+  ctx.fillStyle = badgeBg;
   roundRect(ctx, statusBadgeX, statusBadgeY, statusBadgeW, statusBadgeH, 12);
   ctx.fill();
-  ctx.strokeStyle = '#a7f3d0';
+  ctx.strokeStyle = badgeBorder;
   ctx.lineWidth = 1;
   ctx.stroke();
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#047857';
-  ctx.font = 'bold 12px "Segoe UI", Tahoma, Arial, sans-serif';
-  ctx.fillText('PAID / مدفوعة', statusBadgeX + statusBadgeW / 2, statusBadgeY + 5);
+  ctx.fillStyle = badgeText;
+  ctx.font = 'bold 11px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText(statusInfo.fullBadgeText, statusBadgeX + statusBadgeW / 2, statusBadgeY + 5);
 
   y = Math.max(textY + 22, metaY + 36);
 
@@ -746,20 +768,37 @@ async function renderA4ToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement
   }
 
   // Payment Badge Box
-  ctx.fillStyle = '#ecfdf5';
+  let payBoxBg = '#ecfdf5';
+  let payBoxBorder = '#a7f3d0';
+  let payBoxText = '#047857';
+  if (stUpper === 'PARTIALLY_REFUNDED') {
+    payBoxBg = '#fffbeb';
+    payBoxBorder = '#fde68a';
+    payBoxText = '#b45309';
+  } else if (stUpper === 'REFUNDED') {
+    payBoxBg = '#fff7ed';
+    payBoxBorder = '#fed7aa';
+    payBoxText = '#c2410c';
+  } else if (stUpper === 'CANCELLED' || stUpper === 'VOID') {
+    payBoxBg = '#fef2f2';
+    payBoxBorder = '#fecaca';
+    payBoxText = '#b91c1c';
+  }
+
+  ctx.fillStyle = payBoxBg;
   roundRect(ctx, L, leftY, leftNotesW, 44, 6);
   ctx.fill();
-  ctx.strokeStyle = '#a7f3d0';
+  ctx.strokeStyle = payBoxBorder;
   ctx.stroke();
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#047857';
+  ctx.fillStyle = payBoxText;
   ctx.font = '13px "Segoe UI", Tahoma, Arial, sans-serif';
   ctx.fillText('Payment Status / حالة السداد:', L + 14, leftY + 14);
 
   ctx.textAlign = 'right';
-  ctx.font = 'bold 13.5px "Segoe UI", Tahoma, Arial, sans-serif';
-  ctx.fillText('PAID IN FULL / مسدد بالكامل', L + leftNotesW - 14, leftY + 14);
+  ctx.font = 'bold 12.5px "Segoe UI", Tahoma, Arial, sans-serif';
+  ctx.fillText(statusInfo.paymentStatusText, L + leftNotesW - 14, leftY + 14);
 
   // Right side: Totals Box
   ctx.fillStyle = '#f8fafc';
@@ -1203,6 +1242,26 @@ export function generateA4InvoicePdf(data: ReceiptPayload): jsPDF {
   doc.text(`${data.date}  ${data.time}`, RIGHT, metaY + 4.5, {
     align: 'right',
   });
+
+  if (data.status) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text('Status:', RIGHT - 42, metaY + 9);
+    doc.setFont('helvetica', 'bold');
+    const isRefunded = data.status.toUpperCase().includes('REFUND');
+    const isCancelled = data.status.toUpperCase().includes('CANCEL') || data.status.toUpperCase().includes('VOID');
+    if (isRefunded) {
+      doc.setTextColor(180, 83, 9);
+    } else if (isCancelled) {
+      doc.setTextColor(185, 28, 28);
+    } else {
+      doc.setTextColor(4, 120, 87);
+    }
+    doc.text(data.status.replace(/_/g, ' '), RIGHT, metaY + 9, {
+      align: 'right',
+    });
+    y += 4.5;
+  }
 
   y += 10;
 

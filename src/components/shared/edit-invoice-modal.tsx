@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2, AlertCircle, ShoppingBag, User, CreditCard, DollarSign } from 'lucide-react';
 import { formatQar, formatInvoiceNumber } from '@/lib/utils';
 

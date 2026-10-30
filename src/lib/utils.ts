@@ -74,6 +74,16 @@ export interface InvoiceStatusDisplay {
 
 export function getInvoiceStatusDisplay(status?: string): InvoiceStatusDisplay {
   const s = (status || 'PAID').toUpperCase();
+  if (s === 'PENDING_SETTLEMENT') {
+    return {
+      labelEn: 'PENDING SETTLEMENT',
+      labelAr: 'معلق للسداد',
+      fullBadgeText: 'PENDING SETTLEMENT / معلق للسداد',
+      paymentStatusText: 'PENDING SETTLEMENT / معلق للسداد من المنصة',
+      badgeClasses: 'bg-amber-50 text-amber-800 border-amber-300',
+      boxClasses: 'bg-amber-50/80 border-amber-200 text-amber-900',
+    };
+  }
   if (s === 'PARTIALLY_REFUNDED') {
     return {
       labelEn: 'PARTIALLY REFUNDED',

@@ -14,6 +14,7 @@ interface PosState {
   customerEmail: string;
   customerId: string | null;
   customerStoreCredit: number;
+  orderChannel: 'IN_STORE_POS' | 'TALABAT' | 'SNOONU' | 'RAFEEQ' | 'WHATSAPP' | 'WEBSITE';
 
   // Pricing & Totals
   discountAmount: number;
@@ -53,6 +54,7 @@ interface PosState {
   setCustomer: (customer: { id?: string | null; name: string; phone: string; email?: string; storeCreditQar?: number }) => void;
   setDiscount: (amount: number, type?: 'FIXED' | 'PERCENT') => void;
   setDeliveryFee: (fee: number) => void;
+  setOrderChannel: (channel: 'IN_STORE_POS' | 'TALABAT' | 'SNOONU' | 'RAFEEQ' | 'WHATSAPP' | 'WEBSITE') => void;
 
   holdCurrentSale: () => boolean;
   recallSale: (id: string) => void;
@@ -198,6 +200,7 @@ export const usePosStore = create<PosState>()(
       customerEmail: '',
       customerId: null,
       customerStoreCredit: 0,
+      orderChannel: 'IN_STORE_POS',
 
       discountAmount: 0,
       discountType: 'FIXED',
@@ -683,6 +686,7 @@ export const usePosStore = create<PosState>()(
           customerStoreCredit: 0,
           discountAmount: 0,
           deliveryFee: 0,
+          orderChannel: 'IN_STORE_POS',
         }),
 
       setCustomer: (customer) =>
@@ -701,6 +705,17 @@ export const usePosStore = create<PosState>()(
         }),
 
       setDeliveryFee: (fee) => set({ deliveryFee: Math.max(0, fee) }),
+      setOrderChannel: (channel) => {
+        const isAggregator = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(channel);
+        const currentName = get().customerName;
+        const isDefaultName = !currentName || currentName === 'Walk-in Customer' || currentName.endsWith('Customer');
+        set({
+          orderChannel: channel,
+          ...(isAggregator && isDefaultName
+            ? { customerName: `${channel.charAt(0) + channel.slice(1).toLowerCase()} Customer` }
+            : (!isAggregator && isDefaultName ? { customerName: 'Walk-in Customer' } : {})),
+        });
+      },
 
       holdCurrentSale: () => {
         const { lines, customerName, customerPhone, customerEmail, deliveryFee, getGrandTotal, getItemCount } = get();

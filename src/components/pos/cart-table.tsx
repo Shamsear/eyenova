@@ -65,9 +65,9 @@ export function CartTable() {
     getGrandTotal,
     getItemCount,
     showToast,
+    orderChannel,
+    setOrderChannel,
   } = usePosStore();
-
-  const [activeChannel, setActiveChannel] = useState<'IN_STORE_POS' | 'TALABAT' | 'SNOONU' | 'RAFEEQ' | 'WHATSAPP' | 'WEBSITE'>('IN_STORE_POS');
   const [showDiscountInput, setShowDiscountInput] = useState(false);
   const [discountVal, setDiscountVal] = useState('');
 
@@ -476,11 +476,11 @@ export function CartTable() {
             ] as const
           ).map((ch) => {
             const Icon = ch.icon;
-            const isSelected = activeChannel === ch.id;
+            const isSelected = orderChannel === ch.id;
             return (
               <button
                 key={ch.id}
-                onClick={() => setActiveChannel(ch.id)}
+                onClick={() => setOrderChannel(ch.id)}
                 className={`px-2 py-0.5 rounded font-medium whitespace-nowrap transition cursor-pointer flex items-center gap-1 shrink-0 ${
                   isSelected
                     ? 'bg-stone-900 text-white'
@@ -493,6 +493,15 @@ export function CartTable() {
             );
           })}
         </div>
+        {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) && (
+          <div className="flex items-center justify-between px-2 py-0.5 bg-amber-50 border border-amber-200/80 rounded text-[10px] text-amber-900 mt-1">
+            <span className="flex items-center gap-1 font-medium">
+              <Truck size={11} className="text-amber-700 shrink-0" />
+              <span>{orderChannel} Platform Receivable (Pending Settlement)</span>
+            </span>
+            <span className="text-[9px] text-amber-700">Commission reconciled at payout</span>
+          </div>
+        )}
       </div>
 
       {/* 2. Prescription Config Strip (Swiss Stone Style) */}
@@ -856,30 +865,39 @@ export function CartTable() {
               <span>(F4)</span>
             )}
           </button>
-          <button
-            onClick={() => setPaymentModalOpen(true)}
-            disabled={lines.length === 0}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
-            title="Tender Cash (F6)"
-          >
-            Cash (F6)
-          </button>
-          <button
-            onClick={() => setPaymentModalOpen(true)}
-            disabled={lines.length === 0}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
-            title="Tender Card (F7)"
-          >
-            Card (F7)
-          </button>
-          <button
-            onClick={() => setPaymentModalOpen(true)}
-            disabled={lines.length === 0}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
-            title="Split Payment (F8)"
-          >
-            Split (F8)
-          </button>
+          {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) ? (
+            <div className="col-span-3 flex items-center justify-center py-1 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-medium min-h-[28px] truncate px-1 gap-1">
+              <Truck size={11} className="text-amber-700 shrink-0" />
+              <span className="truncate">Pending Platform Receivable (No Cash In Till)</span>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => setPaymentModalOpen(true)}
+                disabled={lines.length === 0}
+                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                title="Tender Cash (F6)"
+              >
+                Cash (F6)
+              </button>
+              <button
+                onClick={() => setPaymentModalOpen(true)}
+                disabled={lines.length === 0}
+                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                title="Tender Card (F7)"
+              >
+                Card (F7)
+              </button>
+              <button
+                onClick={() => setPaymentModalOpen(true)}
+                disabled={lines.length === 0}
+                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                title="Split Payment (F8)"
+              >
+                Split (F8)
+              </button>
+            </>
+          )}
         </div>
 
         {/* Primary Pay & Print Button (Full-width, Strictly Single-Line) */}
@@ -888,8 +906,17 @@ export function CartTable() {
           disabled={lines.length === 0}
           className="w-full min-h-[38px] py-1.5 rounded bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
         >
-          <Printer size={13} />
-          <span>PAY & PRINT (F12)</span>
+          {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) ? (
+            <>
+              <Truck size={13} className="text-amber-400" />
+              <span>BILL TO {orderChannel} (PENDING) (F12)</span>
+            </>
+          ) : (
+            <>
+              <Printer size={13} />
+              <span>PAY & PRINT (F12)</span>
+            </>
+          )}
         </button>
       </div>
     </div>

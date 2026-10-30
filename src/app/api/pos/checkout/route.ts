@@ -115,8 +115,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Map PaymentMethod enum and Create Order
+    const orderSourceInput = (body.orderSource || '').toUpperCase();
+    const isAggregator = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes((paymentMethod || '').toUpperCase()) 
+      || ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderSourceInput);
+
     let mappedPaymentMethod = 'IN_STORE_PAYMENT';
-    if (paymentMethod === 'STORE_CREDIT') {
+    if (isAggregator) {
+      mappedPaymentMethod = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderSourceInput) ? orderSourceInput : (paymentMethod || 'AGGREGATOR').toUpperCase();
+    } else if (paymentMethod === 'STORE_CREDIT') {
       mappedPaymentMethod = 'STORE_CREDIT';
     } else if (paymentMethod === 'CARD' || paymentMethod === 'CREDIT_CARD') {
       mappedPaymentMethod = 'CREDIT_CARD';
@@ -128,26 +134,32 @@ export async function POST(req: NextRequest) {
       mappedPaymentMethod = 'IN_STORE_PAYMENT';
     }
 
+    const orderStatus = isAggregator ? 'CONFIRMED' : 'PAYMENT_CONFIRMED';
+    const paymentStatus = isAggregator ? 'PENDING' : 'PAID';
+    const invoiceStatus = isAggregator ? 'PENDING_SETTLEMENT' : 'PAID';
+    const paidAt = isAggregator ? null : now;
+    const finalOrderSource = isAggregator ? (['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderSourceInput) ? orderSourceInput : mappedPaymentMethod) : 'IN_STORE_POS';
+
     const order = await prisma.order.create({
       data: {
         id: `ORD_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         orderNumber,
         userId: finalCustomerId || null,
-        orderSource: 'IN_STORE_POS',
-        fulfillmentType: 'IN_STORE_TAKEOUT',
-        orderStatus: 'PAYMENT_CONFIRMED',
-        paymentStatus: 'PAID',
+        orderSource: finalOrderSource,
+        fulfillmentType: isAggregator ? 'HOME_DELIVERY' : 'IN_STORE_TAKEOUT',
+        orderStatus,
+        paymentStatus,
         paymentMethod: mappedPaymentMethod,
         paymentReference: paymentReference || null,
         subtotalQar: subtotal,
         discountQar: discount,
         deliveryFeeQar: delFee,
         totalQar: grandTotal,
-        customerName: customerName || 'Walk-in Customer',
+        customerName: customerName || (isAggregator ? `${finalOrderSource} Customer` : 'Walk-in Customer'),
         customerPhone: customerPhone && customerPhone.trim() ? customerPhone.trim() : '—',
         customerEmail: customerEmail || null,
         salespersonName: cashierName || 'Cashier',
-        notes: notes || null,
+        notes: notes || (isAggregator ? `[${finalOrderSource} Delivery - Pending Settlement]` : null),
         createdAt: now,
         updatedAt: now,
       },
@@ -206,9 +218,9 @@ export async function POST(req: NextRequest) {
         id: `INV_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         invoiceNumber,
         orderId: order.id,
-        customerName: customerName || 'Walk-in Customer',
+        customerName: customerName || (isAggregator ? `${finalOrderSource} Customer` : 'Walk-in Customer'),
         customerPhone: customerPhone && customerPhone.trim() ? customerPhone.trim() : '—',
-        status: 'PAID',
+        status: invoiceStatus,
         subtotalQar: subtotal,
         taxRate: taxRate || 0,
         taxTotalQar: taxTotal,
@@ -216,15 +228,15 @@ export async function POST(req: NextRequest) {
         deliveryFeeQar: delFee,
         totalQar: grandTotal,
         issuedAt: now,
-        paidAt: now,
+        paidAt: paidAt,
         salespersonName: cashierName || 'Cashier',
         createdAt: now,
         updatedAt: now,
       },
     });
 
-    // 5. Update CashRegisterShift if open
-    if (shiftId && shiftId !== 'SHIFT-AUTO') {
+    // 5. Update CashRegisterShift if open (skip for aggregator orders)
+    if (shiftId && shiftId !== 'SHIFT-AUTO' && !isAggregator) {
       const isCash = paymentMethod === 'CASH' || mappedPaymentMethod === 'IN_STORE_PAYMENT';
       const isCard = paymentMethod === 'CARD' || mappedPaymentMethod === 'CREDIT_CARD' || mappedPaymentMethod === 'DEBIT_CARD_QPAY';
       const isOther = paymentMethod === 'STORE_CREDIT';

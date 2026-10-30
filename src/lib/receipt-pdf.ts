@@ -45,6 +45,10 @@ function formatPaymentMethod(m: string): string {
   if (up === 'CASH_ON_DELIVERY' || up === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
   if (up === 'APPLE_PAY') return 'أبل باي / Apple Pay';
   if (up === 'ONLINE') return 'أونلاين / Online';
+  if (up === 'SNOONU') return 'سنونو (معلق للسداد) / Snoonu (Pending)';
+  if (up === 'TALABAT') return 'طلبات (معلق للسداد) / Talabat (Pending)';
+  if (up === 'RAFEEQ') return 'رفيق (معلق للسداد) / Rafeeq (Pending)';
+  if (up === 'AGGREGATOR') return 'توصيل منصات (معلق للسداد) / Platform Delivery (Pending)';
   return m;
 }
 

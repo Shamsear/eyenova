@@ -26,6 +26,8 @@ import { ThermalReceiptBill } from '@/components/shared/thermal-receipt-bill';
 import { A4InvoiceBill } from '@/components/shared/a4-invoice-bill';
 import { PrintReceiptArea } from '@/components/shared/print-receipt';
 import { EditInvoiceModal } from '@/components/shared/edit-invoice-modal';
+import { AggregatorSettlementModal } from '@/components/invoices/aggregator-settlement-modal';
+import { Building2 } from 'lucide-react';
 
 
 interface InvoiceRow {
@@ -62,6 +64,7 @@ interface InvoiceRow {
 
 const STATUS_FILTERS = [
   { id: 'ALL', label: 'All Invoices' },
+  { id: 'PENDING_SETTLEMENT', label: 'Pending Settlement' },
   { id: 'PAID', label: 'Paid' },
   { id: 'ISSUED', label: 'Issued' },
   { id: 'PARTIALLY_REFUNDED', label: 'Partially Refunded' },
@@ -74,6 +77,8 @@ export function statusToVariant(status: string): StatusVariant {
     case 'PAID':
     case 'ISSUED':
       return 'success';
+    case 'PENDING_SETTLEMENT':
+      return 'warning';
     case 'PARTIALLY_REFUNDED':
     case 'REFUNDED':
       return 'warning';
@@ -98,6 +103,7 @@ export default function InvoicesPage() {
   const [refundError, setRefundError] = useState('');
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRow | null>(null);
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
 
   const { canRefund, user, store } = useSessionStore();
 
@@ -349,6 +355,11 @@ export default function InvoicesPage() {
           filters={STATUS_FILTERS}
           activeFilter={selectedStatus}
           onFilterChange={setSelectedStatus}
+          primaryAction={{
+            label: 'Aggregator Settlement',
+            icon: Building2,
+            onClick: () => setIsSettlementModalOpen(true),
+          }}
         />
 
         {/* Universal DataTable with Global Pre-Filtered Pagination & Mobile Cards */}
@@ -615,6 +626,14 @@ export default function InvoicesPage() {
           onSaveSuccess={handleEditSuccess}
         />
       )}
+
+      {/* Aggregator Settlement Modal */}
+      <AggregatorSettlementModal
+        isOpen={isSettlementModalOpen}
+        onClose={() => setIsSettlementModalOpen(false)}
+        invoices={invoices}
+        onSettlementSuccess={fetchInvoices}
+      />
 
       {/* Hidden Print Area for browser print (supports A4 and 80mm) */}
       <PrintReceiptArea

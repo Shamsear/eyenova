@@ -13,12 +13,15 @@ import {
   Check,
   Loader2,
   AlertTriangle,
+  Truck,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 
 const QUICK_CASH_PRESETS = [50, 100, 200, 500];
+
+type PaymentMethodType = 'CASH' | 'CARD' | 'SPLIT' | 'STORE_CREDIT' | 'SNOONU' | 'TALABAT' | 'RAFEEQ';
 
 export function PaymentModal() {
   const {
@@ -34,6 +37,7 @@ export function PaymentModal() {
     discountAmount,
     deliveryFee,
     taxRate,
+    orderChannel,
     getGrandTotal,
     clearCart,
     setReceiptModalOpen,
@@ -42,8 +46,9 @@ export function PaymentModal() {
 
   const { user, store, shift } = useSessionStore();
   const grandTotal = getGrandTotal();
+  const isAggregatorChannel = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel);
 
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'SPLIT' | 'STORE_CREDIT'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>('CASH');
   const [cashTendered, setCashTendered] = useState<string>('');
   const [cardApprovalCode, setCardApprovalCode] = useState<string>('');
   const [splitCash, setSplitCash] = useState<string>('');
@@ -51,14 +56,22 @@ export function PaymentModal() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const isAggregatorPayment = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(paymentMethod);
+
   useEffect(() => {
     if (isPaymentModalOpen) {
+      if (isAggregatorChannel) {
+        setPaymentMethod(orderChannel as PaymentMethodType);
+        setCardApprovalCode('');
+      } else {
+        setPaymentMethod('CASH');
+        setCardApprovalCode(`AUTH-${Math.floor(100000 + Math.random() * 900000)}`);
+      }
       setCashTendered(grandTotal > 0 ? grandTotal.toFixed(2) : '');
-      setCardApprovalCode(`AUTH-${Math.floor(100000 + Math.random() * 900000)}`);
       setSplitCash(grandTotal > 0 ? (grandTotal / 2).toFixed(2) : '');
       setErrorMessage('');
     }
-  }, [isPaymentModalOpen, grandTotal]);
+  }, [isPaymentModalOpen, grandTotal, isAggregatorChannel, orderChannel]);
 
   if (!isPaymentModalOpen) return null;
 
@@ -109,8 +122,11 @@ export function PaymentModal() {
           customerPhone,
           customerEmail,
           customerId,
+          orderSource: isAggregatorPayment ? paymentMethod : orderChannel,
           paymentMethod,
-          paymentReference: paymentMethod === 'CASH' ? null : finalRef,
+          paymentReference: isAggregatorPayment
+            ? (cardApprovalCode.trim() || null)
+            : (paymentMethod === 'CASH' ? null : finalRef),
           cashTendered: paymentMethod === 'CASH' ? cashVal : undefined,
           changeDue: paymentMethod === 'CASH' ? changeDue : undefined,
           discountAmount,
@@ -137,7 +153,11 @@ export function PaymentModal() {
         });
       } catch {}
 
-      showToast('Payment Completed', `Invoice ${formatInvoiceNumber(data.invoice.invoiceNumber)} issued`, true);
+      showToast(
+        isAggregatorPayment ? 'Platform Sale Billed' : 'Payment Completed',
+        `Invoice ${formatInvoiceNumber(data.invoice.invoiceNumber)} issued (${isAggregatorPayment ? 'Pending Settlement' : 'Paid'})`,
+        true
+      );
       setPaymentModalOpen(false);
       setReceiptModalOpen(true, data.receipt);
       clearCart();
@@ -157,12 +177,14 @@ export function PaymentModal() {
         transition={{ duration: 0.2, ease: 'easeOut' }}
         className="bg-white rounded-t-xl sm:rounded-xl border border-stone-200 w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col shadow-xl"
       >
-        {/* Modal Header (Swiss Light Style) */}
+        {/* Modal Header */}
         <div className="p-3 bg-white border-b border-stone-200 flex items-center justify-between shrink-0">
           <div className="min-w-0">
-            <h2 className="font-medium text-sm text-stone-900 truncate">Payment & Receipt</h2>
+            <h2 className="font-medium text-sm text-stone-900 truncate">
+              {isAggregatorPayment ? `${paymentMethod} Platform Billing` : 'Payment & Receipt'}
+            </h2>
             <div className="text-[11px] text-stone-500 font-mono truncate flex items-center gap-1">
-              <span>Total Due:</span>
+              <span>{isAggregatorPayment ? 'Receivable Total:' : 'Total Due:'}</span>
               <AnimatedQar value={grandTotal} />
             </div>
           </div>
@@ -175,56 +197,124 @@ export function PaymentModal() {
           </button>
         </div>
 
+        {/* Aggregator Channel Indicator Banner */}
+        {isAggregatorChannel && (
+          <div className="bg-amber-50 border-b border-amber-200 px-3 py-2 flex items-center justify-between text-xs text-amber-900">
+            <div className="flex items-center gap-1.5 font-medium">
+              <Truck size={14} className="text-amber-700 shrink-0" />
+              <span>Channel: {orderChannel}</span>
+            </div>
+            <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono font-medium">
+              PENDING SETTLEMENT
+            </span>
+          </div>
+        )}
+
         {/* Payment Method Selector Tabs */}
         <div className="grid grid-cols-4 bg-stone-50 p-1 border-b border-stone-200 gap-1 text-xs shrink-0">
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('CASH')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
-              paymentMethod === 'CASH'
-                ? 'bg-stone-900 text-white'
-                : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
-            }`}
-          >
-            <Banknote size={13} />
-            <span>Cash (F6)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('CARD')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
-              paymentMethod === 'CARD'
-                ? 'bg-stone-900 text-white'
-                : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
-            }`}
-          >
-            <CreditCard size={13} />
-            <span>Card (F7)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('SPLIT')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
-              paymentMethod === 'SPLIT'
-                ? 'bg-stone-900 text-white'
-                : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
-            }`}
-          >
-            <Split size={13} />
-            <span>Split (F8)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('STORE_CREDIT')}
-            className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
-              paymentMethod === 'STORE_CREDIT'
-                ? 'bg-stone-900 text-white'
-                : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
-            }`}
-          >
-            <Wallet size={13} />
-            <span className="truncate">Credit</span>
-          </button>
+          {isAggregatorChannel ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod(orderChannel as PaymentMethodType)}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  isAggregatorPayment
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Truck size={13} />
+                <span>{orderChannel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CASH')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'CASH'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Banknote size={13} />
+                <span>Cash</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CARD')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'CARD'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <CreditCard size={13} />
+                <span>Card</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('SPLIT')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'SPLIT'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Split size={13} />
+                <span>Split</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CASH')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'CASH'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Banknote size={13} />
+                <span>Cash (F6)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('CARD')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'CARD'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <CreditCard size={13} />
+                <span>Card (F7)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('SPLIT')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'SPLIT'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Split size={13} />
+                <span>Split (F8)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('STORE_CREDIT')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium transition cursor-pointer ${
+                  paymentMethod === 'STORE_CREDIT'
+                    ? 'bg-stone-900 text-white'
+                    : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/60'
+                }`}
+              >
+                <Wallet size={13} />
+                <span className="truncate">Credit</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -233,7 +323,7 @@ export function PaymentModal() {
           <div className="bg-stone-50 border border-stone-200 p-3 rounded-lg flex items-center justify-between">
             <div>
               <span className="text-[10px] text-stone-500 block font-mono uppercase tracking-wider">
-                Total Payable
+                {isAggregatorPayment ? 'Receivable Amount' : 'Total Payable'}
               </span>
               <AnimatedQar
                 value={grandTotal}
@@ -269,6 +359,50 @@ export function PaymentModal() {
               </div>
             ))}
           </div>
+
+          {/* Aggregator Settlement Details */}
+          {isAggregatorPayment && (
+            <div className="space-y-3">
+              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-amber-900 font-medium">Platform Channel:</span>
+                  <span className="font-semibold text-amber-950 font-mono">{paymentMethod}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-amber-200/60 pt-2">
+                  <span className="text-amber-900">Gross Platform Receivable:</span>
+                  <AnimatedQar value={grandTotal} className="font-mono font-medium text-xs text-amber-950" />
+                </div>
+                <div className="flex items-center justify-between border-t border-amber-200/60 pt-2">
+                  <span className="text-amber-900">Counter Cash Collected:</span>
+                  <span className="font-mono text-stone-500">0.00 QAR (Paid via {paymentMethod})</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                  {paymentMethod} Order / Waybill ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={cardApprovalCode}
+                  onChange={(e) => setCardApprovalCode(e.target.value)}
+                  placeholder={`e.g. ${paymentMethod}-10842`}
+                  className="w-full text-xs font-mono font-medium text-stone-900 bg-stone-50 border border-stone-300 rounded-md p-2 focus:bg-white focus:outline-hidden focus:border-stone-500"
+                />
+              </div>
+
+              <div className="p-2.5 rounded bg-stone-50 border border-stone-200 text-[11px] text-stone-700 space-y-1">
+                <div className="font-medium flex items-center gap-1 text-stone-800">
+                  <AlertTriangle size={12} className="text-amber-600 shrink-0" />
+                  <span>No commission is entered during billing</span>
+                </div>
+                <p className="text-stone-600 text-[10px] leading-relaxed">
+                  This bill will be marked <strong>PENDING_SETTLEMENT</strong> without inflating the cashier shift cash.
+                  When the platform payout is deposited, reconcile it in <strong>Invoices &gt; Aggregator Settlement</strong>.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Cash Tender Details */}
           {paymentMethod === 'CASH' && (
@@ -470,7 +604,7 @@ export function PaymentModal() {
           )}
         </div>
 
-        {/* Modal Footer (Single-Line Button) */}
+        {/* Modal Footer */}
         <div className="p-3 bg-stone-50 border-t border-stone-200 flex items-center justify-between gap-2 shrink-0">
           <button
             type="button"
@@ -495,6 +629,11 @@ export function PaymentModal() {
               <>
                 <Loader2 size={13} className="animate-spin text-stone-400" />
                 <span>Processing Payment...</span>
+              </>
+            ) : isAggregatorPayment ? (
+              <>
+                <Truck size={13} className="text-amber-400" />
+                <span>Confirm Bill to {paymentMethod} (Pending) (F12)</span>
               </>
             ) : (
               <span>Complete Sale & Print (F12)</span>

@@ -18,6 +18,10 @@ export function formatMethodText(method: string): string {
   if (m === 'CASH_ON_DELIVERY' || m === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
   if (m === 'APPLE_PAY') return 'أبل باي / Apple Pay';
   if (m === 'ONLINE') return 'أونلاين / Online';
+  if (m === 'SNOONU') return 'سنونو (معلق للسداد) / Snoonu (Pending)';
+  if (m === 'TALABAT') return 'طلبات (معلق للسداد) / Talabat (Pending)';
+  if (m === 'RAFEEQ') return 'رفيق (معلق للسداد) / Rafeeq (Pending)';
+  if (m === 'AGGREGATOR') return 'توصيل منصات (معلق للسداد) / Platform Delivery (Pending)';
   return method;
 }
 

@@ -161,6 +161,23 @@ export default function InvoicesPage() {
 
   const toReceiptPayload = (inv: InvoiceRow): ReceiptPayload => {
     const dt = inv.issuedAt ? new Date(inv.issuedAt) : new Date(inv.createdAt);
+    const items = (inv.items || []).map((it) => ({
+      name: it.name,
+      nameAr: it.nameAr,
+      specs: it.specs,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      total: it.total,
+    }));
+    const itemsSum = items.reduce((acc, it) => acc + (it.total || it.quantity * it.unitPrice), 0);
+    const discount = Number(inv.discountQar) || 0;
+    const deliveryFee = Number(inv.deliveryFeeQar) || 0;
+    const taxAmount = Number(inv.taxTotalQar) || 0;
+    const total = Number(inv.totalQar) || 0;
+    const subtotal = items.length > 0
+      ? itemsSum
+      : (Number(inv.subtotalQar) || Math.max(0, total + discount - deliveryFee - taxAmount));
+
     return {
       invoiceNumber: inv.invoiceNumber,
       orderNumber: inv.orderNumber,
@@ -181,20 +198,13 @@ export default function InvoicesPage() {
       customerEmail: inv.customerEmail || undefined,
       paymentMethod: inv.paymentMethod,
       paymentReference: inv.paymentReference,
-      items: (inv.items || []).map((it) => ({
-        name: it.name,
-        nameAr: it.nameAr,
-        specs: it.specs,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        total: it.total,
-      })),
-      subtotal: inv.subtotalQar,
-      discount: inv.discountQar,
+      items,
+      subtotal,
+      discount,
       taxRate: 0,
-      taxAmount: inv.taxTotalQar,
-      deliveryFee: inv.deliveryFeeQar,
-      total: inv.totalQar,
+      taxAmount,
+      deliveryFee,
+      total,
     };
   };
 

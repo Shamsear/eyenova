@@ -12,9 +12,12 @@ interface ThermalReceiptBillProps {
 export function formatMethodText(method: string): string {
   const m = (method || '').toUpperCase();
   if (m === 'CASH') return 'نقداً / Cash';
-  if (m === 'CARD' || m === 'CREDIT_CARD' || m === 'DEBIT_CARD') return 'بطاقة / Card';
+  if (m === 'CARD' || m === 'CREDIT_CARD' || m === 'DEBIT_CARD' || m === 'DEBIT_CARD_QPAY') return 'بطاقة / Card';
   if (m === 'SPLIT') return 'دفع مجزأ / Split';
   if (m === 'TRANSFER' || m === 'BANK_TRANSFER') return 'تحويل بنكي / Bank Transfer';
+  if (m === 'CASH_ON_DELIVERY' || m === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
+  if (m === 'APPLE_PAY') return 'أبل باي / Apple Pay';
+  if (m === 'ONLINE') return 'أونلاين / Online';
   return method;
 }
 
@@ -26,6 +29,10 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
   const phone = data.phone || '+974 6633 7371';
   const cr = data.crNumber || '';
   const vat = data.vatNumber || ''; // No VAT in Qatar
+
+  // Accurate subtotal computation: always strictly match sum of items
+  const itemsSum = (data.items || []).reduce((acc, it) => acc + (it.total || it.quantity * it.unitPrice), 0);
+  const displaySubtotal = data.items && data.items.length > 0 ? itemsSum : data.subtotal;
 
   return (
     <div
@@ -184,7 +191,7 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
       <div className="space-y-0.5 text-[10px]">
         <div className="flex justify-between">
           <span className="text-stone-600">المجموع الفرعي / Subtotal:</span>
-          <span className="tabular-nums text-stone-800">{data.subtotal.toFixed(2)} QAR</span>
+          <span className="tabular-nums text-stone-800">{displaySubtotal.toFixed(2)} QAR</span>
         </div>
 
         {data.discount > 0 && (

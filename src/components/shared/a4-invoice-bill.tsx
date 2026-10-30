@@ -3,6 +3,7 @@
 import React from 'react';
 import { ReceiptPayload } from '@/lib/types';
 import { formatQar, getInvoiceStatusDisplay } from '@/lib/utils';
+import { formatMethodText } from './thermal-receipt-bill';
 
 interface A4InvoiceBillProps {
   data: ReceiptPayload;
@@ -18,6 +19,8 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
   const cr = data.crNumber || '';
   const website = data.website || 'eyenova.com.qa';
   const statusDisplay = getInvoiceStatusDisplay(data.status);
+  const itemsSum = (data.items || []).reduce((acc, it) => acc + (it.total || it.quantity * it.unitPrice), 0);
+  const displaySubtotal = data.items && data.items.length > 0 ? itemsSum : data.subtotal;
 
   return (
     <div
@@ -125,7 +128,7 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
             </div>
             <div className="flex justify-between">
               <span className="text-stone-500">Payment / طريقة الدفع:</span>
-              <span className="font-medium text-stone-900">{data.paymentMethod}</span>
+              <span className="font-medium text-stone-900">{formatMethodText(data.paymentMethod)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-stone-500">Staff / البائع:</span>
@@ -212,7 +215,7 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
         <div className="w-full sm:w-64 bg-stone-50 rounded-lg border border-stone-200 p-3.5 space-y-2 text-xs">
           <div className="flex justify-between text-stone-600">
             <span>Subtotal / المجموع الفرعي:</span>
-            <span className="font-mono font-medium tabular-nums">{data.subtotal.toFixed(2)} QAR</span>
+            <span className="font-mono font-medium tabular-nums">{displaySubtotal.toFixed(2)} QAR</span>
           </div>
 
           {data.discount > 0 && (

@@ -52,27 +52,8 @@ export async function GET(req: NextRequest) {
       prisma.store.findFirst({ where: { isActive: true } }),
     ]);
 
-    const formatted = invoices.map((inv) => ({
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      orderNumber: inv.order?.orderNumber || '—',
-      customerName: inv.customerName,
-      customerPhone: inv.customerPhone || '—',
-      customerEmail: inv.order?.customerEmail || '—',
-      status: inv.status,
-      subtotalQar: Number(inv.subtotalQar),
-      discountQar: Number(inv.discountQar),
-      taxTotalQar: Number(inv.taxTotalQar),
-      deliveryFeeQar: Number(inv.deliveryFeeQar),
-      totalQar: Number(inv.totalQar),
-      issuedAt: inv.issuedAt ? inv.issuedAt.toISOString() : null,
-      createdAt: inv.createdAt.toISOString(),
-      salespersonName: inv.salespersonName || 'Cashier',
-      paymentMethod: inv.order?.paymentMethod || 'CASH',
-      paymentReference: inv.order?.paymentReference || null,
-      channel: inv.order?.orderSource || 'IN_STORE_POS',
-      itemsCount: inv.order?.items.length || 0,
-      items: inv.order?.items.map((i) => ({
+    const formatted = invoices.map((inv) => {
+      const items = inv.order?.items.map((i) => ({
         id: i.id,
         productId: i.productId,
         name: i.product?.titleEn || 'Product Item',
@@ -81,8 +62,40 @@ export async function GET(req: NextRequest) {
         quantity: i.quantity,
         unitPrice: Number(i.unitPriceQar),
         total: Number(i.totalPriceQar),
-      })) || [],
-    }));
+      })) || [];
+
+      const itemsSum = items.reduce((acc, it) => acc + (it.total || it.quantity * it.unitPrice), 0);
+      const discountQar = Number(inv.discountQar);
+      const taxTotalQar = Number(inv.taxTotalQar);
+      const deliveryFeeQar = Number(inv.deliveryFeeQar);
+      const totalQar = Number(inv.totalQar);
+      const subtotalQar = items.length > 0
+        ? itemsSum
+        : (Number(inv.subtotalQar) || Math.max(0, totalQar + discountQar - deliveryFeeQar - taxTotalQar));
+
+      return {
+        id: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+        orderNumber: inv.order?.orderNumber || '—',
+        customerName: inv.customerName,
+        customerPhone: inv.customerPhone || '—',
+        customerEmail: inv.order?.customerEmail || '—',
+        status: inv.status,
+        subtotalQar,
+        discountQar,
+        taxTotalQar,
+        deliveryFeeQar,
+        totalQar,
+        issuedAt: inv.issuedAt ? inv.issuedAt.toISOString() : null,
+        createdAt: inv.createdAt.toISOString(),
+        salespersonName: inv.salespersonName || 'Cashier',
+        paymentMethod: inv.order?.paymentMethod || 'CASH',
+        paymentReference: inv.order?.paymentReference || null,
+        channel: inv.order?.orderSource || 'IN_STORE_POS',
+        itemsCount: items.length,
+        items,
+      };
+    });
 
     return NextResponse.json({
       invoices: formatted,

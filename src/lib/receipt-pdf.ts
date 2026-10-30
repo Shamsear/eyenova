@@ -39,10 +39,25 @@ function drawSolidLine(
 function formatPaymentMethod(m: string): string {
   const up = (m || '').toUpperCase();
   if (up === 'CASH') return 'نقداً / Cash';
-  if (up === 'CARD' || up === 'CREDIT_CARD' || up === 'DEBIT_CARD') return 'بطاقة / Card';
+  if (up === 'CARD' || up === 'CREDIT_CARD' || up === 'DEBIT_CARD' || up === 'DEBIT_CARD_QPAY') return 'بطاقة / Card';
   if (up === 'SPLIT') return 'دفع مجزأ / Split';
   if (up === 'TRANSFER' || up === 'BANK_TRANSFER') return 'تحويل / Transfer';
+  if (up === 'CASH_ON_DELIVERY' || up === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
+  if (up === 'APPLE_PAY') return 'أبل باي / Apple Pay';
+  if (up === 'ONLINE') return 'أونلاين / Online';
   return m;
+}
+
+export function normalizeReceiptPayload(data: ReceiptPayload): ReceiptPayload {
+  const itemsSum = (data.items || []).reduce(
+    (acc, it) => acc + (it.total || it.quantity * it.unitPrice),
+    0
+  );
+  const subtotal = data.items && data.items.length > 0 ? itemsSum : data.subtotal;
+  return {
+    ...data,
+    subtotal,
+  };
 }
 
 function loadLogoImage(): Promise<HTMLImageElement | null> {
@@ -82,9 +97,10 @@ function roundRect(
 // ─────────────────────────────────────────────
 // Canvas-based Bilingual 80mm Receipt Generator
 // ─────────────────────────────────────────────
-async function renderReceiptToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement | null> {
+async function renderReceiptToCanvas(rawPayload: ReceiptPayload): Promise<HTMLCanvasElement | null> {
   if (typeof document === 'undefined') return null;
 
+  const data = normalizeReceiptPayload(rawPayload);
   const logoImg = await loadLogoImage();
 
   const canvas = document.createElement('canvas');
@@ -410,9 +426,10 @@ async function renderReceiptToCanvas(data: ReceiptPayload): Promise<HTMLCanvasEl
 // ─────────────────────────────────────────────
 // Canvas-based Bilingual Luxury A4 Invoice Generator
 // ─────────────────────────────────────────────
-async function renderA4ToCanvas(data: ReceiptPayload): Promise<HTMLCanvasElement | null> {
+async function renderA4ToCanvas(rawPayload: ReceiptPayload): Promise<HTMLCanvasElement | null> {
   if (typeof document === 'undefined') return null;
 
+  const data = normalizeReceiptPayload(rawPayload);
   const logoImg = await loadLogoImage();
 
   const canvas = document.createElement('canvas');
@@ -1438,10 +1455,11 @@ export async function downloadReceiptPdf(
   data: ReceiptPayload,
   filename?: string,
 ): Promise<void> {
+  const normalized = normalizeReceiptPayload(data);
   // If in browser, render to high-DPI canvas to guarantee 100% Arabic font support, logo and zero overlap
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     try {
-      const canvas = await renderReceiptToCanvas(data);
+      const canvas = await renderReceiptToCanvas(normalized);
       if (canvas) {
         const imgData = canvas.toDataURL('image/png');
         const pdfW = 80;
@@ -1453,7 +1471,7 @@ export async function downloadReceiptPdf(
           format: [pdfW, pdfH],
         });
         doc.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
-        doc.save(filename || `Receipt_${data.invoiceNumber}.pdf`);
+        doc.save(filename || `Receipt_${normalized.invoiceNumber}.pdf`);
         return;
       }
     } catch (err) {
@@ -1462,8 +1480,8 @@ export async function downloadReceiptPdf(
   }
 
   // Fallback direct vector
-  const doc = generateReceiptPdf(data);
-  doc.save(filename || `Receipt_${data.invoiceNumber}.pdf`);
+  const doc = generateReceiptPdf(normalized);
+  doc.save(filename || `Receipt_${normalized.invoiceNumber}.pdf`);
 }
 
 /** Triggers browser download of the A4 formal invoice PDF with full Arabic support and brand logo. */
@@ -1471,10 +1489,11 @@ export async function downloadA4InvoicePdf(
   data: ReceiptPayload,
   filename?: string,
 ): Promise<void> {
+  const normalized = normalizeReceiptPayload(data);
   // If in browser, render to high-DPI canvas to guarantee 100% Arabic shaping, executive luxury styling and brand logo
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     try {
-      const canvas = await renderA4ToCanvas(data);
+      const canvas = await renderA4ToCanvas(normalized);
       if (canvas) {
         const imgData = canvas.toDataURL('image/png');
         const doc = new jsPDF({
@@ -1483,7 +1502,7 @@ export async function downloadA4InvoicePdf(
           format: 'a4',
         });
         doc.addImage(imgData, 'PNG', 0, 0, 210, 297);
-        doc.save(filename || `Invoice_${data.invoiceNumber}.pdf`);
+        doc.save(filename || `Invoice_${normalized.invoiceNumber}.pdf`);
         return;
       }
     } catch (err) {
@@ -1492,6 +1511,6 @@ export async function downloadA4InvoicePdf(
   }
 
   // Fallback direct vector
-  const doc = generateA4InvoicePdf(data);
-  doc.save(filename || `Invoice_${data.invoiceNumber}.pdf`);
+  const doc = generateA4InvoicePdf(normalized);
+  doc.save(filename || `Invoice_${normalized.invoiceNumber}.pdf`);
 }

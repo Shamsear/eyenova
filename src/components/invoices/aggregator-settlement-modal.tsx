@@ -2,8 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Loader2, AlertCircle, Building2, CheckSquare, Square } from 'lucide-react';
+import { X, Check, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckSquare, Square, Package } from 'lucide-react';
 import { formatQar, formatQatarDateTime } from '@/lib/utils';
+
+interface InvoiceProductItem {
+  id: string;
+  productId: string;
+  name: string;
+  nameAr?: string | null;
+  specs?: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
 
 interface InvoiceItem {
   id: string;
@@ -15,6 +26,7 @@ interface InvoiceItem {
   totalQar: number;
   channel: string;
   createdAt: string;
+  items?: InvoiceProductItem[];
 }
 
 interface AggregatorSettlementModalProps {
@@ -24,10 +36,17 @@ interface AggregatorSettlementModalProps {
   onSettlementSuccess: () => void;
 }
 
+interface BillAmountState {
+  netReceived: number;
+  commission: number;
+  isExpanded: boolean;
+  itemAmounts: Record<string, { netReceived: number; commission: number }>;
+}
+
 const PLATFORMS = [
-  { id: 'SNOONU', label: 'Snoonu', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100', active: 'bg-red-600 text-white border-red-600' },
-  { id: 'TALABAT', label: 'Talabat', color: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100', active: 'bg-orange-600 text-white border-orange-600' },
-  { id: 'RAFEEQ', label: 'Rafeeq', color: 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100', active: 'bg-rose-800 text-white border-rose-800' },
+  { id: 'SNOONU', label: 'Snoonu', color: 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50', active: 'bg-red-600 text-white border-red-600 shadow-xs' },
+  { id: 'TALABAT', label: 'Talabat', color: 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50', active: 'bg-orange-600 text-white border-orange-600 shadow-xs' },
+  { id: 'RAFEEQ', label: 'Rafeeq', color: 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50', active: 'bg-rose-800 text-white border-rose-800 shadow-xs' },
 ];
 
 export function AggregatorSettlementModal({
@@ -38,8 +57,9 @@ export function AggregatorSettlementModal({
 }: AggregatorSettlementModalProps) {
   const [platform, setPlatform] = useState<'SNOONU' | 'TALABAT' | 'RAFEEQ'>('SNOONU');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [netReceived, setNetReceived] = useState<string>('');
-  const [commission, setCommission] = useState<string>('0.00');
+  const [billStates, setBillStates] = useState<Record<string, BillAmountState>>({});
+  const [netReceivedTotal, setNetReceivedTotal] = useState<string>('');
+  const [commissionTotal, setCommissionTotal] = useState<string>('0.00');
   const [statementRef, setStatementRef] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -69,33 +89,60 @@ export function AggregatorSettlementModal({
     (inv) => inv.status === 'PENDING_SETTLEMENT' && inv.channel?.toUpperCase() === platform
   );
 
-  // When platform changes or modal opens, select all bills for that platform
+  // Initialize or reset bill amounts when platform or modal changes
   useEffect(() => {
     if (isOpen) {
       const allIds = new Set(platformBills.map((b) => b.id));
       setSelectedIds(allIds);
-      const gross = platformBills.reduce((sum, b) => sum + b.totalQar, 0);
-      setNetReceived(gross.toFixed(2));
-      setCommission('0.00');
+
+      const newStates: Record<string, BillAmountState> = {};
+      let totalGross = 0;
+
+      for (const b of platformBills) {
+        totalGross += b.totalQar;
+        const itemAmounts: Record<string, { netReceived: number; commission: number }> = {};
+        if (b.items && b.items.length > 0) {
+          for (const it of b.items) {
+            itemAmounts[it.id] = { netReceived: it.total, commission: 0 };
+          }
+        }
+        newStates[b.id] = {
+          netReceived: b.totalQar,
+          commission: 0,
+          isExpanded: false,
+          itemAmounts,
+        };
+      }
+
+      setBillStates(newStates);
+      setNetReceivedTotal(totalGross.toFixed(2));
+      setCommissionTotal('0.00');
       setStatementRef(`${platform}-PAYOUT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`);
       setErrorMessage('');
       setSuccessMessage('');
     }
-  }, [isOpen, platform, activeInvoices.length]);
+  }, [isOpen, platform, platformBills.length]);
 
   const selectedBills = platformBills.filter((b) => selectedIds.has(b.id));
   const grossTotal = selectedBills.reduce((sum, b) => sum + b.totalQar, 0);
 
+  const recalculateFromBills = (updatedStates: Record<string, BillAmountState>, currentSelectedIds: Set<string>) => {
+    const selBills = platformBills.filter((b) => currentSelectedIds.has(b.id));
+    const sumNet = selBills.reduce((sum, b) => sum + (updatedStates[b.id]?.netReceived ?? b.totalQar), 0);
+    const sumComm = selBills.reduce((sum, b) => sum + (updatedStates[b.id]?.commission ?? 0), 0);
+    setNetReceivedTotal(sumNet.toFixed(2));
+    setCommissionTotal(sumComm.toFixed(2));
+  };
+
   const handleToggleAll = () => {
     if (selectedIds.size === platformBills.length) {
       setSelectedIds(new Set());
-      setNetReceived('0.00');
-      setCommission('0.00');
+      setNetReceivedTotal('0.00');
+      setCommissionTotal('0.00');
     } else {
       const allIds = new Set(platformBills.map((b) => b.id));
       setSelectedIds(allIds);
-      setNetReceived(grossTotal.toFixed(2));
-      setCommission('0.00');
+      recalculateFromBills(billStates, allIds);
     }
   };
 
@@ -107,20 +154,140 @@ export function AggregatorSettlementModal({
       next.add(id);
     }
     setSelectedIds(next);
-
-    const nextSelected = platformBills.filter((b) => next.has(b.id));
-    const nextGross = nextSelected.reduce((sum, b) => sum + b.totalQar, 0);
-    setNetReceived(nextGross.toFixed(2));
-    setCommission('0.00');
+    recalculateFromBills(billStates, next);
   };
 
-  const handleNetReceivedChange = (val: string) => {
-    setNetReceived(val);
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed)) {
-      const diff = Math.max(0, grossTotal - parsed);
-      setCommission(diff.toFixed(2));
+  const handleToggleExpandBill = (id: string) => {
+    setBillStates((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] || { netReceived: 0, commission: 0, isExpanded: false, itemAmounts: {} }),
+        isExpanded: !prev[id]?.isExpanded,
+      },
+    }));
+  };
+
+  const handleToggleExpandAll = () => {
+    const anyCollapsed = platformBills.some((b) => !billStates[b.id]?.isExpanded);
+    const updated: Record<string, BillAmountState> = { ...billStates };
+    for (const b of platformBills) {
+      if (updated[b.id]) {
+        updated[b.id] = { ...updated[b.id], isExpanded: anyCollapsed };
+      }
     }
+    setBillStates(updated);
+  };
+
+  // When user edits received amount for a bill
+  const handleBillNetReceivedChange = (billId: string, valStr: string) => {
+    const val = parseFloat(valStr) || 0;
+    const bill = platformBills.find((b) => b.id === billId);
+    if (!bill) return;
+
+    const comm = Math.max(0, bill.totalQar - val);
+    const ratio = bill.totalQar > 0 ? val / bill.totalQar : 1;
+
+    const newItemAmounts: Record<string, { netReceived: number; commission: number }> = {};
+    if (bill.items) {
+      for (const it of bill.items) {
+        const itemNet = Math.round(it.total * ratio * 100) / 100;
+        newItemAmounts[it.id] = {
+          netReceived: itemNet,
+          commission: Math.max(0, it.total - itemNet),
+        };
+      }
+    }
+
+    const updated = {
+      ...billStates,
+      [billId]: {
+        ...(billStates[billId] || { isExpanded: false }),
+        netReceived: val,
+        commission: comm,
+        isExpanded: billStates[billId]?.isExpanded ?? false,
+        itemAmounts: newItemAmounts,
+      },
+    };
+
+    setBillStates(updated);
+    recalculateFromBills(updated, selectedIds);
+  };
+
+  // When user edits received amount for an individual product in a bill
+  const handleItemNetReceivedChange = (billId: string, itemId: string, valStr: string) => {
+    const val = parseFloat(valStr) || 0;
+    const bill = platformBills.find((b) => b.id === billId);
+    if (!bill || !bill.items) return;
+
+    const currentBillState = billStates[billId] || {
+      netReceived: bill.totalQar,
+      commission: 0,
+      isExpanded: true,
+      itemAmounts: {},
+    };
+
+    const targetItem = bill.items.find((it) => it.id === itemId);
+    const itemGross = targetItem ? targetItem.total : 0;
+    const itemComm = Math.max(0, itemGross - val);
+
+    const updatedItemAmounts = {
+      ...currentBillState.itemAmounts,
+      [itemId]: { netReceived: val, commission: itemComm },
+    };
+
+    // Sum all items for this bill
+    const sumNet = bill.items.reduce(
+      (sum, it) => sum + (it.id === itemId ? val : (updatedItemAmounts[it.id]?.netReceived ?? it.total)),
+      0
+    );
+    const sumComm = Math.max(0, bill.totalQar - sumNet);
+
+    const updated = {
+      ...billStates,
+      [billId]: {
+        ...currentBillState,
+        netReceived: sumNet,
+        commission: sumComm,
+        itemAmounts: updatedItemAmounts,
+      },
+    };
+
+    setBillStates(updated);
+    recalculateFromBills(updated, selectedIds);
+  };
+
+  // When user edits overall total Net Received at bottom
+  const handleNetReceivedTotalChange = (valStr: string) => {
+    setNetReceivedTotal(valStr);
+    const val = parseFloat(valStr);
+    if (isNaN(val) || grossTotal <= 0) return;
+
+    const ratio = val / grossTotal;
+    const updated: Record<string, BillAmountState> = { ...billStates };
+
+    for (const b of selectedBills) {
+      const bNet = Math.round(b.totalQar * ratio * 100) / 100;
+      const bComm = Math.max(0, b.totalQar - bNet);
+      const itemAmounts: Record<string, { netReceived: number; commission: number }> = {};
+
+      if (b.items) {
+        for (const it of b.items) {
+          const itNet = Math.round(it.total * ratio * 100) / 100;
+          itemAmounts[it.id] = { netReceived: itNet, commission: Math.max(0, it.total - itNet) };
+        }
+      }
+
+      updated[b.id] = {
+        ...(updated[b.id] || { isExpanded: false }),
+        netReceived: bNet,
+        commission: bComm,
+        isExpanded: updated[b.id]?.isExpanded ?? false,
+        itemAmounts,
+      };
+    }
+
+    setBillStates(updated);
+    setCommissionTotal(Math.max(0, grossTotal - val).toFixed(2));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,19 +297,38 @@ export function AggregatorSettlementModal({
       return;
     }
 
-    const net = parseFloat(netReceived);
+    const net = parseFloat(netReceivedTotal);
     if (isNaN(net) || net < 0) {
       setErrorMessage('Please enter a valid received bank amount.');
       return;
     }
 
-    const comm = parseFloat(commission) || 0;
+    const comm = parseFloat(commissionTotal) || 0;
 
     setIsSubmitting(true);
     setErrorMessage('');
     setSuccessMessage('');
 
     try {
+      const payloadBills = selectedBills.map((b) => {
+        const bState = billStates[b.id];
+        return {
+          invoiceId: b.id,
+          invoiceNumber: b.invoiceNumber,
+          orderNumber: b.orderNumber,
+          grossQar: b.totalQar,
+          netReceivedQar: bState?.netReceived ?? b.totalQar,
+          commissionQar: bState?.commission ?? 0,
+          items: (b.items || []).map((it) => ({
+            productId: it.productId,
+            title: it.name,
+            grossQar: it.total,
+            netReceivedQar: bState?.itemAmounts?.[it.id]?.netReceived ?? it.total,
+            commissionQar: bState?.itemAmounts?.[it.id]?.commission ?? 0,
+          })),
+        };
+      });
+
       const res = await fetch('/api/invoices/settlement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,6 +338,7 @@ export function AggregatorSettlementModal({
           netAmountReceived: net,
           commissionAmount: comm,
           statementRef: statementRef.trim() || undefined,
+          bills: payloadBills,
         }),
       });
 
@@ -181,25 +368,25 @@ export function AggregatorSettlementModal({
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.96 }}
-          className="bg-white rounded-xl border border-stone-200 shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+          className="bg-white rounded-xl border border-stone-200 shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
         >
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 bg-stone-50/50 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-lg">
+              <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl">
                 🛵
               </div>
               <div>
                 <h3 className="text-sm font-bold text-stone-900">Aggregator Payout Settlement &amp; Reconciliation</h3>
                 <p className="text-[11px] text-stone-500">
-                  تسوية مبيعات منصات التوصيل وإيداع صافي البنك وتوثيق العمولات
+                  Select bills from payout statement and track received amounts per bill and product item
                 </p>
               </div>
             </div>
             <button
               onClick={onClose}
               disabled={isSubmitting}
-              className="p-1 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition"
+              className="p-1 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition cursor-pointer"
             >
               <X size={18} />
             </button>
@@ -210,11 +397,15 @@ export function AggregatorSettlementModal({
               {/* Platform Selection Tabs */}
               <div>
                 <label className="text-xs font-semibold text-stone-700 mb-1.5 block">
-                  Select Delivery Platform / اختر المنصة:
+                  Select Delivery Platform:
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {PLATFORMS.map((p) => {
                     const isSelected = platform === p.id;
+                    const count = activeInvoices.filter(
+                      (i) => i.status === 'PENDING_SETTLEMENT' && i.channel?.toUpperCase() === p.id
+                    ).length;
+
                     return (
                       <button
                         key={p.id}
@@ -225,8 +416,12 @@ export function AggregatorSettlementModal({
                         }`}
                       >
                         <span>{p.label}</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/10">
-                          {activeInvoices.filter((i) => i.status === 'PENDING_SETTLEMENT' && i.channel?.toUpperCase() === p.id).length}
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                            isSelected ? 'bg-black/20 text-white' : 'bg-stone-100 text-stone-600'
+                          }`}
+                        >
+                          {count}
                         </span>
                       </button>
                     );
@@ -234,7 +429,7 @@ export function AggregatorSettlementModal({
                 </div>
               </div>
 
-              {/* Selection Bar & Pending Bills Count */}
+              {/* Selection Bar & Pending Bills Summary */}
               <div className="flex items-center justify-between text-xs pt-1">
                 <div className="flex items-center gap-2">
                   <button
@@ -250,6 +445,14 @@ export function AggregatorSettlementModal({
                     <span>{selectedIds.size === platformBills.length ? 'Deselect All' : 'Select All'}</span>
                   </button>
                   <span className="text-stone-300">|</span>
+                  <button
+                    type="button"
+                    onClick={handleToggleExpandAll}
+                    className="text-stone-600 hover:text-stone-900 font-semibold cursor-pointer"
+                  >
+                    Expand/Collapse Products
+                  </button>
+                  <span className="text-stone-300">|</span>
                   <span className="text-stone-500 font-medium">
                     {selectedIds.size} of {platformBills.length} bills selected
                   </span>
@@ -260,95 +463,179 @@ export function AggregatorSettlementModal({
                 </div>
               </div>
 
-              {/* Pending Bills Table */}
-              <div className="border border-stone-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+              {/* Pending Bills Table with Itemized Product Breakdown */}
+              <div className="border border-stone-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
                 {platformBills.length === 0 ? (
                   <div className="py-8 text-center text-stone-400 text-xs">
                     No pending bills for {platform}. All orders are settled.
                   </div>
                 ) : (
-                  <table className="w-full text-left border-collapse text-[11px]">
-                    <thead className="bg-stone-50 text-stone-500 sticky top-0 border-b border-stone-200">
-                      <tr>
-                        <th className="py-2 px-3 w-8"></th>
-                        <th className="py-2 px-3">Invoice #</th>
-                        <th className="py-2 px-3">Date</th>
-                        <th className="py-2 px-3">Customer</th>
-                        <th className="py-2 px-3 text-right">Gross Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {platformBills.map((b) => {
-                        const isChecked = selectedIds.has(b.id);
-                        return (
-                          <tr
-                            key={b.id}
-                            onClick={() => handleToggleRow(b.id)}
-                            className={`cursor-pointer transition hover:bg-stone-50 ${
-                              isChecked ? 'bg-amber-50/40' : ''
-                            }`}
-                          >
-                            <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="divide-y divide-stone-100 text-[11px]">
+                    {platformBills.map((b) => {
+                      const isChecked = selectedIds.has(b.id);
+                      const bState = billStates[b.id] || {
+                        netReceived: b.totalQar,
+                        commission: 0,
+                        isExpanded: false,
+                        itemAmounts: {},
+                      };
+
+                      return (
+                        <div key={b.id} className={`transition ${isChecked ? 'bg-stone-50/70' : 'bg-white opacity-70'}`}>
+                          {/* Main Bill Header Row */}
+                          <div className="p-2.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               <input
                                 type="checkbox"
                                 checked={isChecked}
                                 onChange={() => handleToggleRow(b.id)}
-                                className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
                               />
-                            </td>
-                            <td className="py-2 px-3 font-mono font-medium text-stone-900">{b.invoiceNumber}</td>
-                            <td className="py-2 px-3 text-stone-500 font-mono text-[10px]">
-                              {formatQatarDateTime(b.createdAt)}
-                            </td>
-                            <td className="py-2 px-3 text-stone-700 truncate max-w-[140px]">{b.customerName}</td>
-                            <td className="py-2 px-3 font-mono font-bold text-stone-900 text-right">
-                              {formatQar(b.totalQar)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+
+                              <button
+                                type="button"
+                                onClick={() => handleToggleExpandBill(b.id)}
+                                className="p-1 hover:bg-stone-200/60 rounded text-stone-500 transition cursor-pointer shrink-0"
+                                title="Toggle product items"
+                              >
+                                {bState.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+
+                              <div className="min-w-0">
+                                <span className="font-mono font-bold text-stone-900 block truncate">
+                                  {b.invoiceNumber}
+                                </span>
+                                <span className="text-[10px] text-stone-500 block truncate">
+                                  {formatQatarDateTime(b.createdAt)} • {b.customerName}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="text-right">
+                                <span className="text-[9px] text-stone-500 block">Gross</span>
+                                <span className="font-mono font-bold text-stone-900 text-xs">
+                                  {formatQar(b.totalQar)}
+                                </span>
+                              </div>
+
+                              <div className="text-right">
+                                <label className="text-[9px] text-emerald-800 font-semibold block">Net Received</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={bState.netReceived}
+                                  onChange={(e) => handleBillNetReceivedChange(b.id, e.target.value)}
+                                  className="w-24 h-7 px-2 text-xs font-mono font-bold text-emerald-700 bg-white border border-emerald-300 rounded text-right focus:border-emerald-600 focus:outline-hidden"
+                                />
+                              </div>
+
+                              <div className="text-right min-w-[65px]">
+                                <span className="text-[9px] text-rose-700 font-semibold block">Commission</span>
+                                <span className="font-mono font-bold text-rose-700 text-xs">
+                                  {formatQar(bState.commission)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded Items Breakdown */}
+                          {bState.isExpanded && b.items && b.items.length > 0 && (
+                            <div className="bg-stone-100/70 border-t border-stone-200/80 px-4 py-2 space-y-1.5">
+                              <div className="text-[10px] font-bold text-stone-700 flex items-center gap-1">
+                                <Package size={11} className="text-stone-500" />
+                                <span>Product Line Items (Edit item received amount if listed on statement):</span>
+                              </div>
+                              <div className="space-y-1">
+                                {b.items.map((it) => {
+                                  const itState = bState.itemAmounts?.[it.id] || {
+                                    netReceived: it.total,
+                                    commission: 0,
+                                  };
+
+                                  return (
+                                    <div
+                                      key={it.id}
+                                      className="flex items-center justify-between gap-2 py-1 px-2 rounded bg-white border border-stone-200 text-[10px]"
+                                    >
+                                      <div className="min-w-0 flex-1 truncate">
+                                        <span className="font-medium text-stone-900">{it.name}</span>
+                                        <span className="text-stone-500 ml-1.5">x{it.quantity}</span>
+                                      </div>
+
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <div className="text-right">
+                                          <span className="text-stone-500 font-mono">{formatQar(it.total)}</span>
+                                        </div>
+
+                                        <div className="text-right">
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={itState.netReceived}
+                                            onChange={(e) => handleItemNetReceivedChange(b.id, it.id, e.target.value)}
+                                            className="w-20 h-6 px-1.5 text-[11px] font-mono font-bold text-emerald-700 bg-white border border-stone-300 rounded text-right focus:border-stone-800 focus:outline-hidden"
+                                          />
+                                        </div>
+
+                                        <div className="text-right min-w-[55px]">
+                                          <span className="font-mono text-rose-700">
+                                            {formatQar(itState.commission)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              {/* Payout Financial Inputs */}
+              {/* Payout & Commission Total Summary Form */}
               <div className="bg-stone-50 p-3.5 rounded-lg border border-stone-200 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                      Net Bank Deposit (QAR)* / صافي المحول للبنك:
+                      Total Net Bank Deposit (QAR)* / صافي المحول للبنك:
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={netReceived}
-                      onChange={(e) => handleNetReceivedChange(e.target.value)}
+                      value={netReceivedTotal}
+                      onChange={(e) => handleNetReceivedTotalChange(e.target.value)}
                       required
                       placeholder="0.00"
-                      className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
+                      className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden text-emerald-700"
                     />
                     <span className="text-[10px] text-stone-500 block mt-0.5">
-                      Amount transferred to company bank account
+                      Sum of all bill received amounts (or enters proportional distribution)
                     </span>
                   </div>
 
                   <div>
                     <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                      Commission &amp; Deductions (QAR) / العمولات المقتطعة:
+                      Total Platform Commission (QAR) / إجمالي العمولات:
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={commission}
-                      onChange={(e) => setCommission(e.target.value)}
+                      value={commissionTotal}
+                      onChange={(e) => setCommissionTotal(e.target.value)}
                       placeholder="0.00"
                       className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden text-rose-700"
                     />
                     <span className="text-[10px] text-stone-500 block mt-0.5">
-                      Difference (Gross Total - Bank Deposit)
+                      Total deducted across all selected bills (Gross - Net Bank)
                     </span>
                   </div>
                 </div>

@@ -45,10 +45,10 @@ function formatPaymentMethod(m: string): string {
   if (up === 'CASH_ON_DELIVERY' || up === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
   if (up === 'APPLE_PAY') return 'أبل باي / Apple Pay';
   if (up === 'ONLINE') return 'أونلاين / Online';
-  if (up === 'SNOONU') return 'سنونو (معلق للسداد) / Snoonu (Pending)';
-  if (up === 'TALABAT') return 'طلبات (معلق للسداد) / Talabat (Pending)';
-  if (up === 'RAFEEQ') return 'رفيق (معلق للسداد) / Rafeeq (Pending)';
-  if (up === 'AGGREGATOR') return 'توصيل منصات (معلق للسداد) / Platform Delivery (Pending)';
+  if (up === 'SNOONU') return 'سنونو / Snoonu';
+  if (up === 'TALABAT') return 'طلبات / Talabat';
+  if (up === 'RAFEEQ') return 'رفيق / Rafeeq';
+  if (up === 'AGGREGATOR') return 'توصيل منصات / Platform Delivery';
   return m;
 }
 
@@ -524,9 +524,10 @@ async function renderA4ToCanvas(rawPayload: ReceiptPayload): Promise<HTMLCanvasE
     metaY += 22;
   }
 
-  // Status Badge
-  const statusInfo = getInvoiceStatusDisplay(data.status);
+  // Status Badge (Never print pending on customer receipt - show as PAID)
   const stUpper = (data.status || 'PAID').toUpperCase();
+  const effectiveStatus = stUpper.includes('PENDING') ? 'PAID' : (data.status || 'PAID');
+  const statusInfo = getInvoiceStatusDisplay(effectiveStatus);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = '#64748b';

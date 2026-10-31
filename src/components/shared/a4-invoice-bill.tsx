@@ -71,12 +71,14 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
               <span className="text-stone-500">Date / التاريخ:</span>
               <span className="font-mono text-stone-700">{data.date} {data.time}</span>
             </div>
-            <div className="flex sm:justify-end gap-2 items-center">
-              <span className="text-stone-500">Status / الحالة:</span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusDisplay.badgeClasses}`}>
-                {statusDisplay.fullBadgeText}
-              </span>
-            </div>
+            {!data.status?.toUpperCase().includes('PENDING') && (
+              <div className="flex sm:justify-end gap-2 items-center">
+                <span className="text-stone-500">Status / الحالة:</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusDisplay.badgeClasses}`}>
+                  {statusDisplay.fullBadgeText}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -205,9 +207,9 @@ export function A4InvoiceBill({ data, className = '' }: A4InvoiceBillProps) {
             </div>
           )}
 
-          <div className={`p-2.5 rounded border text-[11px] flex items-center justify-between ${statusDisplay.boxClasses}`}>
+          <div className={`p-2.5 rounded border text-[11px] flex items-center justify-between ${data.status?.toUpperCase().includes('PENDING') ? 'bg-emerald-50/70 border-emerald-200 text-emerald-800' : statusDisplay.boxClasses}`}>
             <span className="font-semibold">Payment Status / حالة السداد:</span>
-            <span className="font-mono font-bold">{statusDisplay.paymentStatusText}</span>
+            <span className="font-mono font-bold">{data.status?.toUpperCase().includes('PENDING') ? 'PAID VIA PLATFORM / مدفوع عبر المنصة' : statusDisplay.paymentStatusText}</span>
           </div>
         </div>
 

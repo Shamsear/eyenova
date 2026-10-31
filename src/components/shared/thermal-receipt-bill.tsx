@@ -18,10 +18,10 @@ export function formatMethodText(method: string): string {
   if (m === 'CASH_ON_DELIVERY' || m === 'COD') return 'الدفع عند الاستلام / Cash On Delivery';
   if (m === 'APPLE_PAY') return 'أبل باي / Apple Pay';
   if (m === 'ONLINE') return 'أونلاين / Online';
-  if (m === 'SNOONU') return 'سنونو (معلق للسداد) / Snoonu (Pending)';
-  if (m === 'TALABAT') return 'طلبات (معلق للسداد) / Talabat (Pending)';
-  if (m === 'RAFEEQ') return 'رفيق (معلق للسداد) / Rafeeq (Pending)';
-  if (m === 'AGGREGATOR') return 'توصيل منصات (معلق للسداد) / Platform Delivery (Pending)';
+  if (m === 'SNOONU') return 'سنونو / Snoonu';
+  if (m === 'TALABAT') return 'طلبات / Talabat';
+  if (m === 'RAFEEQ') return 'رفيق / Rafeeq';
+  if (m === 'AGGREGATOR') return 'توصيل منصات / Platform Delivery';
   return method;
 }
 
@@ -112,7 +112,7 @@ export function ThermalReceiptBill({ data, className = '', isPrintPortal = false
             {data.date} {data.time}
           </span>
         </div>
-        {data.status && (
+        {data.status && !data.status.toUpperCase().includes('PENDING') && data.status.toUpperCase() !== 'PAID' && (
           <div className="flex justify-between">
             <span className="text-stone-600">الحالة / Status:</span>
             <span className="font-bold text-stone-900 font-mono text-[9.5px]">

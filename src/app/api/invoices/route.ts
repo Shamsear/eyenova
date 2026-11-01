@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
         paymentMethod: inv.order?.paymentMethod || 'CASH',
         paymentReference: inv.order?.paymentReference || null,
         channel: inv.order?.orderSource || 'IN_STORE_POS',
+        orderSource: inv.order?.orderSource || 'IN_STORE_POS',
         itemsCount: items.length,
         items,
       };

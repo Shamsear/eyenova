@@ -49,6 +49,7 @@ interface InvoiceRow {
   paymentMethod: string;
   paymentReference?: string;
   channel: string;
+  orderSource?: string;
   itemsCount: number;
   items: {
     id: string;

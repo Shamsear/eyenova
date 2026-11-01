@@ -15,6 +15,8 @@ export interface InvoiceEditData {
   salespersonName?: string;
   paymentMethod: string;
   paymentReference?: string;
+  orderSource?: string;
+  channel?: string;
   notes?: string;
   subtotalQar: number;
   discountQar: number;
@@ -51,10 +53,62 @@ export function EditInvoiceModal({
   const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
   const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || '');
   const [salespersonName, setSalespersonName] = useState(invoice.salespersonName || '');
+  const [orderSource, setOrderSource] = useState(invoice?.orderSource || invoice?.channel || 'IN_STORE_POS');
   const [paymentMethod, setPaymentMethod] = useState(invoice.paymentMethod || 'CASH');
   const [paymentReference, setPaymentReference] = useState(invoice.paymentReference || '');
   const [status, setStatus] = useState(invoice.status || 'PAID');
   const [notes, setNotes] = useState(invoice.notes || '');
+
+  // Synchronized change handlers for aggregators vs in-store/online
+  const handleOrderSourceChange = (newSource: string) => {
+    setOrderSource(newSource);
+    const isAgg = ['SNOONU', 'TALABAT', 'RAFEEQ'].includes(newSource);
+    if (isAgg) {
+      setPaymentMethod(newSource);
+      setStatus('PENDING_SETTLEMENT');
+    } else if (newSource === 'WHATSAPP' || newSource === 'WEBSITE') {
+      if (['SNOONU', 'TALABAT', 'RAFEEQ'].includes(paymentMethod)) {
+        setPaymentMethod('CASH');
+      }
+      if (status === 'PENDING_SETTLEMENT') {
+        setStatus('PAID');
+      }
+    } else {
+      // IN_STORE_POS
+      if (['SNOONU', 'TALABAT', 'RAFEEQ'].includes(paymentMethod)) {
+        setPaymentMethod('CASH');
+      }
+      if (status === 'PENDING_SETTLEMENT') {
+        setStatus('PAID');
+      }
+    }
+  };
+
+  const handlePaymentMethodChange = (newMethod: string) => {
+    setPaymentMethod(newMethod);
+    const isAgg = ['SNOONU', 'TALABAT', 'RAFEEQ'].includes(newMethod);
+    if (isAgg) {
+      setOrderSource(newMethod);
+      setStatus('PENDING_SETTLEMENT');
+    } else if (newMethod === 'WHATSAPP' || newMethod === 'WEBSITE') {
+      setOrderSource(newMethod);
+      if (status === 'PENDING_SETTLEMENT') {
+        setStatus('PAID');
+      }
+    } else {
+      // Non-aggregator (CASH, CARD, SPLIT, TRANSFER)
+      if (['SNOONU', 'TALABAT', 'RAFEEQ'].includes(orderSource)) {
+        setOrderSource('IN_STORE_POS');
+      }
+      if (status === 'PENDING_SETTLEMENT') {
+        setStatus('PAID');
+      }
+    }
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    setStatus(newStatus);
+  };
 
   // Line items state
   const [items, setItems] = useState(
@@ -107,6 +161,8 @@ export function EditInvoiceModal({
         customerPhone: customerPhone.trim(),
         customerEmail: customerEmail.trim() || undefined,
         salespersonName: salespersonName.trim() || undefined,
+        orderSource,
+        channel: orderSource,
         paymentMethod,
         paymentReference: paymentReference.trim() || undefined,
         status,
@@ -151,6 +207,7 @@ export function EditInvoiceModal({
       setCustomerPhone(invoice.customerPhone || '');
       setCustomerEmail(invoice.customerEmail || '');
       setSalespersonName(invoice.salespersonName || '');
+      setOrderSource(invoice.orderSource || invoice.channel || 'IN_STORE_POS');
       setPaymentMethod(invoice.paymentMethod || 'CASH');
       setPaymentReference(invoice.paymentReference || '');
       setStatus(invoice.status || 'PAID');
@@ -261,20 +318,43 @@ export function EditInvoiceModal({
               <CreditCard size={14} className="text-stone-600" />
               <span>Payment & Status / تفاصيل السداد والحالة</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                  Order Source / منصة الطلب
+                </label>
+                <select
+                  value={orderSource}
+                  onChange={(e) => handleOrderSourceChange(e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
+                >
+                  <option value="IN_STORE_POS">محل / In-Store POS</option>
+                  <option value="SNOONU">سنونو / Snoonu</option>
+                  <option value="TALABAT">طلبات / Talabat</option>
+                  <option value="RAFEEQ">رفيق / Rafeeq</option>
+                  <option value="WHATSAPP">واتساب / WhatsApp</option>
+                  <option value="WEBSITE">الموقع / Website</option>
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-medium text-stone-600 mb-1">
                   Payment Method / طريقة الدفع
                 </label>
                 <select
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white"
+                  onChange={(e) => handlePaymentMethodChange(e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
                 >
-                  <option value="CARD">بطاقة / Card</option>
                   <option value="CASH">نقداً / Cash</option>
+                  <option value="CARD">بطاقة / Card</option>
                   <option value="SPLIT">دفع مجزأ / Split</option>
                   <option value="TRANSFER">تحويل / Bank Transfer</option>
+                  <option value="SNOONU">سنونو / Snoonu</option>
+                  <option value="TALABAT">طلبات / Talabat</option>
+                  <option value="RAFEEQ">رفيق / Rafeeq</option>
+                  <option value="WHATSAPP">واتساب / WhatsApp</option>
+                  <option value="WEBSITE">الموقع / Website</option>
                 </select>
               </div>
 
@@ -287,7 +367,7 @@ export function EditInvoiceModal({
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
                   className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md font-mono focus:border-stone-900 focus:outline-none"
-                  placeholder="e.g. CARD Auth / Code"
+                  placeholder="e.g. SNOONU-8821 / Auth"
                 />
               </div>
 
@@ -297,10 +377,17 @@ export function EditInvoiceModal({
                 </label>
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className={`w-full text-xs px-2.5 py-1.5 border rounded-md focus:border-stone-900 focus:outline-none font-semibold ${
+                    status === 'PENDING_SETTLEMENT'
+                      ? 'bg-amber-50 border-amber-300 text-amber-900'
+                      : status === 'PAID'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : 'bg-white border-stone-300 text-stone-800'
+                  }`}
                 >
                   <option value="PAID">PAID / مدفوعة</option>
+                  <option value="PENDING_SETTLEMENT">PENDING SETTLEMENT / معلق للسداد (منصات)</option>
                   <option value="ISSUED">ISSUED / صادرة</option>
                   <option value="REFUNDED">REFUNDED / مسترجعة</option>
                   <option value="CANCELLED">CANCELLED / ملغاة</option>
@@ -320,6 +407,32 @@ export function EditInvoiceModal({
                 />
               </div>
             </div>
+
+            {/* Dynamic Status / Platform Notice Banner */}
+            {['SNOONU', 'TALABAT', 'RAFEEQ'].includes(orderSource) || ['SNOONU', 'TALABAT', 'RAFEEQ'].includes(paymentMethod) || status === 'PENDING_SETTLEMENT' ? (
+              <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2.5">
+                <span className="text-base leading-none shrink-0">🛵</span>
+                <div className="text-[11.5px] leading-relaxed">
+                  <div>
+                    <strong className="font-bold text-amber-950">Delivery Platform Order ({orderSource}): </strong>
+                    Payment status is marked as <span className="font-mono font-bold bg-amber-200/80 px-1 py-0.5 rounded text-amber-950">PENDING_SETTLEMENT</span>.
+                    This bill will appear in the <strong>Aggregator Settlement</strong> modal for {orderSource} until reconciled.
+                  </div>
+                  <div className="text-amber-800 text-[11px] mt-1" dir="rtl">
+                    طلب منصة توصيل ({orderSource}): تم تعيين حالة الدفع لمعلق للسداد من المنصة. ستظهر الفاتورة فوراً في نافذة تسوية المنصات للمطابقة والسداد.
+                  </div>
+                </div>
+              </div>
+            ) : (
+              orderSource === 'IN_STORE_POS' && status === 'PAID' && (
+                <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-center gap-2">
+                  <span className="text-sm font-bold text-emerald-700 shrink-0">✓</span>
+                  <span className="text-[11px]">
+                    <strong>In-Store POS Bill:</strong> Payment marked as <strong>PAID</strong>. Reconciled directly into in-store cash/card treasury.
+                  </span>
+                </div>
+              )
+            )}
 
             <div>
               <label className="block text-[11px] font-medium text-stone-600 mb-1">

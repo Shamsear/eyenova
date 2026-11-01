@@ -269,7 +269,7 @@ export function EditInvoiceModal({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Customer Name / الاسم *
                 </label>
                 <input
@@ -277,13 +277,13 @@ export function EditInvoiceModal({
                   required
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
                   placeholder="Client full name"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Phone Number / رقم الهاتف *
                 </label>
                 <input
@@ -292,20 +292,20 @@ export function EditInvoiceModal({
                   dir="ltr"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md font-mono focus:border-stone-900 focus:outline-none"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md font-mono focus:border-stone-900 focus:outline-none"
                   placeholder="+974 ..."
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Email / البريد الإلكتروني
                 </label>
                 <input
                   type="email"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
                   placeholder="optional@domain.com"
                 />
               </div>
@@ -318,15 +318,17 @@ export function EditInvoiceModal({
               <CreditCard size={14} className="text-stone-600" />
               <span>Payment & Status / تفاصيل السداد والحالة</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+
+            {/* Row 1: Primary Classification (3 balanced columns) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Order Source / منصة الطلب
                 </label>
                 <select
                   value={orderSource}
                   onChange={(e) => handleOrderSourceChange(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
                 >
                   <option value="IN_STORE_POS">محل / In-Store POS</option>
                   <option value="SNOONU">سنونو / Snoonu</option>
@@ -338,13 +340,13 @@ export function EditInvoiceModal({
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Payment Method / طريقة الدفع
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={(e) => handlePaymentMethodChange(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none bg-white font-medium"
                 >
                   <option value="CASH">نقداً / Cash</option>
                   <option value="CARD">بطاقة / Card</option>
@@ -359,26 +361,13 @@ export function EditInvoiceModal({
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                  Payment Ref / رقم الإيصال
-                </label>
-                <input
-                  type="text"
-                  value={paymentReference}
-                  onChange={(e) => setPaymentReference(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md font-mono focus:border-stone-900 focus:outline-none"
-                  placeholder="e.g. SNOONU-8821 / Auth"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Invoice Status / حالة الفاتورة
                 </label>
                 <select
                   value={status}
                   onChange={(e) => handleStatusChange(e.target.value)}
-                  className={`w-full text-xs px-2.5 py-1.5 border rounded-md focus:border-stone-900 focus:outline-none font-semibold ${
+                  className={`w-full text-xs px-2.5 py-1.5 h-8.5 border rounded-md focus:border-stone-900 focus:outline-none font-semibold ${
                     status === 'PENDING_SETTLEMENT'
                       ? 'bg-amber-50 border-amber-300 text-amber-900'
                       : status === 'PAID'
@@ -387,22 +376,38 @@ export function EditInvoiceModal({
                   }`}
                 >
                   <option value="PAID">PAID / مدفوعة</option>
-                  <option value="PENDING_SETTLEMENT">PENDING SETTLEMENT / معلق للسداد (منصات)</option>
+                  <option value="PENDING_SETTLEMENT">PENDING SETTLEMENT / معلق للسداد</option>
                   <option value="ISSUED">ISSUED / صادرة</option>
                   <option value="REFUNDED">REFUNDED / مسترجعة</option>
                   <option value="CANCELLED">CANCELLED / ملغاة</option>
                 </select>
               </div>
+            </div>
+
+            {/* Row 2: Payment Ref & Staff Salesperson (2 balanced columns) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
+                  Payment Ref / رقم الإيصال
+                </label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md font-mono focus:border-stone-900 focus:outline-none"
+                  placeholder="e.g. SNOONU-8821 / CARD Auth"
+                />
+              </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                   Salesperson / البائع
                 </label>
                 <input
                   type="text"
                   value={salespersonName}
                   onChange={(e) => setSalespersonName(e.target.value)}
-                  className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
+                  className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
                   placeholder="Staff / Cashier"
                 />
               </div>
@@ -435,14 +440,14 @@ export function EditInvoiceModal({
             )}
 
             <div>
-              <label className="block text-[11px] font-medium text-stone-600 mb-1">
+              <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
                 Order Notes / ملاحظات الفاتورة
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full text-xs px-2.5 py-1.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
+                className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
                 placeholder="Prescription or special handling notes..."
               />
             </div>

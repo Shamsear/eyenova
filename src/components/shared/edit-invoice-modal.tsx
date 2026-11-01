@@ -42,6 +42,15 @@ interface EditInvoiceModalProps {
   onSaveSuccess: (updatedInvoice: any) => void;
 }
 
+function sanitizeEmail(val?: string | null): string {
+  if (!val) return '';
+  const trimmed = val.trim();
+  if (trimmed === '—' || trimmed === '-' || trimmed.toLowerCase() === 'n/a') {
+    return '';
+  }
+  return trimmed;
+}
+
 export function EditInvoiceModal({
   invoice,
   isOpen,
@@ -51,7 +60,7 @@ export function EditInvoiceModal({
   // Local form state
   const [customerName, setCustomerName] = useState(invoice?.customerName || '');
   const [customerPhone, setCustomerPhone] = useState(invoice.customerPhone || '');
-  const [customerEmail, setCustomerEmail] = useState(invoice.customerEmail || '');
+  const [customerEmail, setCustomerEmail] = useState(sanitizeEmail(invoice?.customerEmail));
   const [salespersonName, setSalespersonName] = useState(invoice.salespersonName || '');
   const [orderSource, setOrderSource] = useState(invoice?.orderSource || invoice?.channel || 'IN_STORE_POS');
   const [paymentMethod, setPaymentMethod] = useState(invoice.paymentMethod || 'CASH');
@@ -159,7 +168,7 @@ export function EditInvoiceModal({
       const payload = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim() || undefined,
+        customerEmail: sanitizeEmail(customerEmail) || undefined,
         salespersonName: salespersonName.trim() || undefined,
         orderSource,
         channel: orderSource,
@@ -205,7 +214,7 @@ export function EditInvoiceModal({
     if (invoice && isOpen) {
       setCustomerName(invoice.customerName || '');
       setCustomerPhone(invoice.customerPhone || '');
-      setCustomerEmail(invoice.customerEmail || '');
+      setCustomerEmail(sanitizeEmail(invoice.customerEmail));
       setSalespersonName(invoice.salespersonName || '');
       setOrderSource(invoice.orderSource || invoice.channel || 'IN_STORE_POS');
       setPaymentMethod(invoice.paymentMethod || 'CASH');
@@ -299,14 +308,15 @@ export function EditInvoiceModal({
 
               <div>
                 <label className="block text-[11px] font-medium text-stone-600 mb-1 h-4 leading-4 truncate">
-                  Email / البريد الإلكتروني
+                  Email / البريد الإلكتروني (اختياري)
                 </label>
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
                   className="w-full text-xs px-2.5 py-1.5 h-8.5 border border-stone-300 rounded-md focus:border-stone-900 focus:outline-none"
-                  placeholder="optional@domain.com"
+                  placeholder="Optional (optional@domain.com)"
                 />
               </div>
             </div>

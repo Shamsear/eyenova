@@ -80,7 +80,10 @@ export async function PATCH(
         const orderData: Record<string, unknown> = {};
         if (customerName !== undefined) orderData.customerName = customerName;
         if (customerPhone !== undefined) orderData.customerPhone = customerPhone;
-        if (customerEmail !== undefined) orderData.customerEmail = customerEmail;
+        if (customerEmail !== undefined) {
+          const cleaned = typeof customerEmail === 'string' ? customerEmail.trim() : '';
+          orderData.customerEmail = (!cleaned || cleaned === '—' || cleaned === '-' || cleaned.toLowerCase() === 'n/a') ? null : cleaned;
+        }
         if (salespersonName !== undefined) orderData.salespersonName = salespersonName;
         if (paymentReference !== undefined) orderData.paymentReference = paymentReference || null;
         if (notes !== undefined) orderData.notes = notes || null;
@@ -205,7 +208,7 @@ export async function PATCH(
         orderNumber: updatedInvoice.order?.orderNumber || '—',
         customerName: updatedInvoice.customerName,
         customerPhone: updatedInvoice.customerPhone || '—',
-        customerEmail: updatedInvoice.order?.customerEmail || '—',
+        customerEmail: updatedInvoice.order?.customerEmail || '',
         status: updatedInvoice.status,
         subtotalQar: Number(updatedInvoice.subtotalQar),
         discountQar: Number(updatedInvoice.discountQar),

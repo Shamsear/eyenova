@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         orderNumber: inv.order?.orderNumber || '—',
         customerName: inv.customerName,
         customerPhone: inv.customerPhone || '—',
-        customerEmail: inv.order?.customerEmail || '—',
+        customerEmail: inv.order?.customerEmail || '',
         status: inv.status,
         subtotalQar,
         discountQar,

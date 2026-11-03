@@ -32,6 +32,7 @@ export function CatalogGrid() {
   const [allProducts, setAllProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [openPowerMenuProductId, setOpenPowerMenuProductId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -147,15 +148,25 @@ export function CatalogGrid() {
       result = result.filter((p) => p.productType === selectedCategory);
     }
 
-    // Filter by Search Query
+    // Filter by Search Query (supports SKU, barcode, title, brand, and in-stock optical powers)
     const query = searchQuery.trim().toLowerCase();
     if (query) {
       result = result.filter((p) => {
+        const matchesBatchPower = p.batches?.some(
+          (b) =>
+            (b.quantity ?? 0) > 0 &&
+            b.power &&
+            (b.power.toLowerCase().includes(query) ||
+              (query === '0.00' && b.power.toLowerCase().includes('plano')) ||
+              (query.includes('plano') && b.power.includes('0.00')))
+        );
+
         return (
           p.titleEn.toLowerCase().includes(query) ||
           (p.brandName && p.brandName.toLowerCase().includes(query)) ||
           (p.barcode && p.barcode.toLowerCase().includes(query)) ||
-          (p.sku && p.sku.toLowerCase().includes(query))
+          (p.sku && p.sku.toLowerCase().includes(query)) ||
+          Boolean(matchesBatchPower)
         );
       });
     }
@@ -175,6 +186,16 @@ export function CatalogGrid() {
     showToast('Item Added', `${product.titleEn} added to bill`, true);
   };
 
+  const handlePowerChipClick = (product: ProductItem, pwr: string) => {
+    const isPlano = pwr.toLowerCase().includes('plano') || pwr === '0.00';
+    const cleanPower = isPlano ? '0.00' : pwr;
+    addLine(product, {
+      power: cleanPower,
+      isPlano,
+    });
+    showToast('Item Added', `${product.titleEn} (${pwr}) added to bill`, true);
+  };
+
   return (
     <div className="flex-1 min-h-0 flex flex-col h-full bg-stone-50 border-r border-stone-200 overflow-hidden">
       {/* Top Search & Filter Bar (Strictly Single-Line) */}
@@ -186,7 +207,7 @@ export function CatalogGrid() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by Barcode, SKU, Title, or Brand (F1)..."
+            placeholder="Search by Barcode, SKU, Title, Brand, or Power (-1.50, Plano) (F1)..."
             className="w-full pl-8 pr-7 py-1.5 bg-stone-50 border border-stone-200 rounded-md text-xs font-normal focus:bg-white focus:outline-hidden focus:border-stone-400 transition placeholder:text-stone-400 text-stone-900"
           />
           {searchQuery && (
@@ -350,10 +371,66 @@ export function CatalogGrid() {
                     >
                       {product.titleEn}
                     </span>
+
+                    {/* In-Stock Optical Power Chips */}
+                    {(() => {
+                      const inStockBatches = (product.batches || []).filter((b) => (b.quantity ?? 0) > 0);
+                      const pwrMap = new Map<string, number>();
+                      for (const b of inStockBatches) {
+                        const pwr = b.power?.trim() || 'Plano';
+                        pwrMap.set(pwr, (pwrMap.get(pwr) || 0) + (b.quantity || 0));
+                      }
+                      const pwrEntries = Array.from(pwrMap.entries());
+                      if (pwrEntries.length === 0) return null;
+
+                      return (
+                        <div className="mt-1 flex flex-wrap gap-1 items-center">
+                          {pwrEntries.slice(0, 3).map(([pwr, qty]) => {
+                            const isSearchMatch =
+                              searchQuery &&
+                              (pwr.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
+                                (searchQuery.trim() === '0.00' && pwr.toLowerCase().includes('plano')));
+
+                            return (
+                              <span
+                                key={pwr}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePowerChipClick(product, pwr);
+                                }}
+                                className={`inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono rounded transition hover:scale-105 cursor-pointer ${
+                                  isSearchMatch
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+                                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-200/60'
+                                }`}
+                                title={`Click to add ${pwr} (${qty} in stock)`}
+                              >
+                                <span>{pwr}</span>
+                                <span className="text-[8px] opacity-75 ml-0.5 font-sans">({qty})</span>
+                              </span>
+                            );
+                          })}
+                          {pwrEntries.length > 3 && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenPowerMenuProductId(
+                                  openPowerMenuProductId === product.id ? null : product.id
+                                );
+                              }}
+                              className="inline-flex items-center px-1 py-0.5 text-[9px] font-mono rounded bg-stone-50 hover:bg-stone-200 text-stone-500 border border-stone-200 cursor-pointer"
+                              title="Click to view all in-stock powers"
+                            >
+                              +{pwrEntries.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Price & Quick Add Button (Single-Line) */}
-                  <div className="mt-1 pt-1 border-t border-stone-100 flex items-center justify-between">
+                  <div className="mt-1 pt-1 border-t border-stone-100 flex items-center justify-between relative">
                     <AnimatedQar
                       value={price}
                       className="font-medium text-xs text-stone-900 font-mono tabular-nums"
@@ -361,6 +438,51 @@ export function CatalogGrid() {
                     <span className="w-4.5 h-4.5 rounded bg-stone-100 group-hover:bg-stone-900 group-hover:text-white text-stone-700 flex items-center justify-center text-xs font-medium transition">
                       +
                     </span>
+
+                    {/* Popover showing all powers if '+N' was clicked */}
+                    {openPowerMenuProductId === product.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute bottom-full right-0 mb-1 z-30 bg-white border border-stone-200 rounded-lg shadow-lg p-2 min-w-[150px] max-w-[200px] max-h-40 overflow-y-auto space-y-1"
+                      >
+                        <div className="flex items-center justify-between pb-1 border-b border-stone-100 text-[10px] font-semibold text-stone-600">
+                          <span>Available Powers</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenPowerMenuProductId(null);
+                            }}
+                            className="text-stone-400 hover:text-stone-700 cursor-pointer"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        {(() => {
+                          const inStockBatches = (product.batches || []).filter((b) => (b.quantity ?? 0) > 0);
+                          const pwrMap = new Map<string, number>();
+                          for (const b of inStockBatches) {
+                            const pwr = b.power?.trim() || 'Plano';
+                            pwrMap.set(pwr, (pwrMap.get(pwr) || 0) + (b.quantity || 0));
+                          }
+                          return Array.from(pwrMap.entries()).map(([pwr, qty]) => (
+                            <button
+                              key={pwr}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenPowerMenuProductId(null);
+                                handlePowerChipClick(product, pwr);
+                              }}
+                              className="w-full flex items-center justify-between px-1.5 py-1 text-[10px] font-mono text-left rounded hover:bg-stone-100 transition cursor-pointer text-stone-800"
+                            >
+                              <span>{pwr}</span>
+                              <span className="text-stone-500 font-sans">({qty})</span>
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    )}
                   </div>
                 </motion.button>
               );

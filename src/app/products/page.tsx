@@ -771,10 +771,44 @@ export default function ProductsPage() {
     },
     {
       key: 'stockQuantity',
-      header: 'Stock Status',
+      header: 'Stock & In-Stock Powers',
       render: (p) => {
         const status = getStockStatus(p.stockQuantity, p.minStockAlert);
-        return <StatusIndicator status={status.label} variant={status.variant} />;
+        const inStockBatches = (p.batches || []).filter((b) => (b.quantity ?? 0) > 0);
+        const pwrMap = new Map<string, number>();
+        for (const b of inStockBatches) {
+          const pwr = b.power?.trim() || 'Plano';
+          pwrMap.set(pwr, (pwrMap.get(pwr) || 0) + (b.quantity || 0));
+        }
+        const pwrEntries = Array.from(pwrMap.entries());
+
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <StatusIndicator status={status.label} variant={status.variant} />
+            {pwrEntries.length > 0 && (
+              <div className="flex flex-wrap gap-1 max-w-[220px]">
+                {pwrEntries.slice(0, 3).map(([pwr, qty]) => (
+                  <span
+                    key={pwr}
+                    className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-mono rounded bg-stone-100 text-stone-700 border border-stone-200/70"
+                    title={`${pwr}: ${qty} in stock`}
+                  >
+                    <span>{pwr}</span>
+                    <span className="text-[8px] text-stone-500 ml-0.5 font-sans">({qty})</span>
+                  </span>
+                ))}
+                {pwrEntries.length > 3 && (
+                  <span
+                    className="inline-flex items-center px-1 py-0.5 text-[9px] font-mono rounded bg-stone-50 text-stone-500 border border-stone-200"
+                    title={pwrEntries.slice(3).map(([pwr, qty]) => `${pwr} (${qty})`).join(', ')}
+                  >
+                    +{pwrEntries.length - 3} more
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
       },
     },
     {

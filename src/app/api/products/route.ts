@@ -21,12 +21,21 @@ export async function GET(req: NextRequest) {
     }
 
     if (q) {
+      const trimmedQ = q.trim();
       where.OR = [
-        { sku: { contains: q, mode: 'insensitive' } },
-        { barcode: { contains: q, mode: 'insensitive' } },
-        { titleEn: { contains: q, mode: 'insensitive' } },
-        { titleAr: { contains: q, mode: 'insensitive' } },
-        { brandName: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: trimmedQ, mode: 'insensitive' } },
+        { barcode: { contains: trimmedQ, mode: 'insensitive' } },
+        { titleEn: { contains: trimmedQ, mode: 'insensitive' } },
+        { titleAr: { contains: trimmedQ, mode: 'insensitive' } },
+        { brandName: { contains: trimmedQ, mode: 'insensitive' } },
+        {
+          batches: {
+            some: {
+              power: { contains: trimmedQ, mode: 'insensitive' },
+              quantity: { gt: 0 },
+            },
+          },
+        },
       ];
     }
 

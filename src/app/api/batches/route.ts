@@ -105,6 +105,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Recompute total active stock and update Product & StoreStock
+    const refreshedBatches = await prisma.productBatch.findMany({
+      where: { productId: product.id },
+    });
+    const totalStock = refreshedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { stockQuantity: totalStock },
+    });
+    await prisma.storeStock.updateMany({
+      where: { productId: product.id },
+      data: { stockQuantity: totalStock },
+    });
+
     return NextResponse.json({ success: true, batch: newBatch });
   } catch (error: any) {
     console.error('Error creating batch:', error);
@@ -121,9 +135,29 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Batch ID is required' }, { status: 400 });
     }
 
+    const targetBatch = await prisma.productBatch.findUnique({
+      where: { id },
+      select: { productId: true },
+    });
+
     await prisma.productBatch.delete({
       where: { id },
     });
+
+    if (targetBatch?.productId) {
+      const refreshedBatches = await prisma.productBatch.findMany({
+        where: { productId: targetBatch.productId },
+      });
+      const totalStock = refreshedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+      await prisma.product.update({
+        where: { id: targetBatch.productId },
+        data: { stockQuantity: totalStock },
+      });
+      await prisma.storeStock.updateMany({
+        where: { productId: targetBatch.productId },
+        data: { stockQuantity: totalStock },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

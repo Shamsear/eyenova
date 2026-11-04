@@ -71,6 +71,7 @@ export interface CartLineItem {
   axis: number | null;
   addPower: string | null;
   isPlano: boolean;
+  batchId?: string | null;
   lensSummary: string;
   imageUrl: string | null;
   stockQuantity: number;

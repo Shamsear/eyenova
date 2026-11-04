@@ -341,7 +341,7 @@ export async function POST(req: NextRequest) {
           data: { receivedQuantity: qty },
         });
 
-        // Register batch in ProductBatch table
+        // Register batch in ProductBatch table and sync StoreStock & Product
         try {
           await prisma.productBatch.create({
             data: {
@@ -357,6 +357,10 @@ export async function POST(req: NextRequest) {
               axis: item.axis ?? null,
             },
           });
+          const allBatches = await prisma.productBatch.findMany({ where: { productId: item.productId } });
+          const totalStock = allBatches.reduce((s, b) => s + (b.quantity || 0), 0);
+          await prisma.product.update({ where: { id: item.productId }, data: { stockQuantity: totalStock } });
+          await prisma.storeStock.updateMany({ where: { productId: item.productId }, data: { stockQuantity: totalStock } });
         } catch (e) {
           console.warn('Batch registration warning:', e);
         }
@@ -505,7 +509,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Register batch in ProductBatch table
+      // Register batch in ProductBatch table and sync StoreStock & Product
       try {
         await prisma.productBatch.create({
           data: {
@@ -521,6 +525,10 @@ export async function POST(req: NextRequest) {
             axis: axis ? parseInt(axis, 10) : null,
           },
         });
+        const allBatches = await prisma.productBatch.findMany({ where: { productId: product.id } });
+        const totalStock = allBatches.reduce((s, b) => s + (b.quantity || 0), 0);
+        await prisma.product.update({ where: { id: product.id }, data: { stockQuantity: totalStock } });
+        await prisma.storeStock.updateMany({ where: { productId: product.id }, data: { stockQuantity: totalStock } });
       } catch (e) {
         console.warn('Batch registration warning:', e);
       }

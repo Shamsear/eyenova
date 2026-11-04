@@ -209,7 +209,6 @@ export async function PATCH(req: NextRequest) {
     if (salePriceQar !== undefined) data.salePriceQar = parseFloat(salePriceQar) || 0;
     if (basePriceQar !== undefined) data.basePriceQar = parseFloat(basePriceQar) || 0;
     if (costPriceQar !== undefined) data.costPriceQar = parseFloat(costPriceQar) || 0;
-    if (stockQuantity !== undefined) data.stockQuantity = parseInt(stockQuantity, 10) || 0;
     if (minStockAlert !== undefined) data.minStockAlert = parseInt(minStockAlert, 10) || 3;
     if (baseCurve !== undefined) data.baseCurve = baseCurve ? parseFloat(baseCurve) : null;
     if (diameter !== undefined) data.diameter = diameter ? parseFloat(diameter) : null;
@@ -221,10 +220,40 @@ export async function PATCH(req: NextRequest) {
       data.powerPriceTiers = Array.isArray(powerPriceTiers) ? powerPriceTiers : [];
     }
 
+    // Safeguard: If physical batches exist for this product, stockQuantity is strictly derived from batches
+    const batchCount = await prisma.productBatch.count({ where: { productId: id } });
+    if (batchCount > 0) {
+      const batchSum = await prisma.productBatch.aggregate({
+        where: { productId: id },
+        _sum: { quantity: true },
+      });
+      data.stockQuantity = batchSum._sum.quantity || 0;
+    } else if (stockQuantity !== undefined) {
+      data.stockQuantity = parseInt(stockQuantity, 10) || 0;
+    }
+
     const updated = await prisma.product.update({
       where: { id },
       data,
     });
+
+    // Synchronize StoreStock to prevent drift
+    if (data.stockQuantity !== undefined) {
+      const updatedCount = await prisma.storeStock.updateMany({
+        where: { productId: id },
+        data: { stockQuantity: data.stockQuantity },
+      });
+      if (updatedCount.count === 0) {
+        await prisma.storeStock.create({
+          data: {
+            storeId: 'STORE-MAIN',
+            productId: id,
+            stockQuantity: data.stockQuantity,
+            minStockAlert: data.minStockAlert ?? 3,
+          },
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ success: true, product: updated });
   } catch (error: any) {

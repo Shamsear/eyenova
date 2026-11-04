@@ -408,23 +408,67 @@ export async function POST(req: NextRequest) {
 
 
 
-      // Decrement Product stock
+      // Deduct from ProductBatch if batches exist, and atomically sync Product & StoreStock
+      try {
+        const prodBatches = await prisma.productBatch.findMany({
+          where: { productId: line.productId },
+          orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
+        });
 
-      await prisma.product.update({
+        if (prodBatches.length > 0) {
+          // Find matching batch
+          let remainingToDeduct = line.quantity;
+          const pwrStr = line.isPlano ? '0.00' : (line.power ? String(line.power).trim() : null);
 
-        where: { id: line.productId },
+          // Priority: 1. explicit batchId, 2. matching power, 3. any active batch with stock
+          const candidates = prodBatches.filter((b) => (b.quantity || 0) > 0);
+          const matchedBatch = (line.batchId ? candidates.find((b) => b.id === line.batchId) : null)
+            || (pwrStr ? candidates.find((b) => {
+                const bP = b.power ? b.power.trim() : '0.00';
+                const normBP = bP === '0.00' || bP.toLowerCase().includes('plano') ? '0.00' : bP;
+                const normP = pwrStr === '0.00' || pwrStr.toLowerCase().includes('plano') ? '0.00' : pwrStr;
+                return normBP === normP;
+              }) : null)
+            || candidates[0];
 
-        data: {
+          if (matchedBatch) {
+            const deductQty = Math.min(matchedBatch.quantity, remainingToDeduct);
+            await prisma.productBatch.update({
+              where: { id: matchedBatch.id },
+              data: { quantity: { decrement: deductQty } },
+            });
+          }
 
-          stockQuantity: {
+          // Recalculate true active batch sum
+          const refreshedBatches = await prisma.productBatch.findMany({
+            where: { productId: line.productId },
+          });
+          const newTotalStock = refreshedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
 
-            decrement: line.quantity,
+          await prisma.product.update({
+            where: { id: line.productId },
+            data: { stockQuantity: newTotalStock },
+          });
 
-          },
+          await prisma.storeStock.updateMany({
+            where: { productId: line.productId },
+            data: { stockQuantity: newTotalStock },
+          });
+        } else {
+          // Standard decrement for products without lot batches (solutions, accessories)
+          await prisma.product.update({
+            where: { id: line.productId },
+            data: { stockQuantity: { decrement: line.quantity } },
+          });
 
-        },
-
-      });
+          await prisma.storeStock.updateMany({
+            where: { productId: line.productId },
+            data: { stockQuantity: { decrement: line.quantity } },
+          });
+        }
+      } catch (stockErr) {
+        console.error('Error deducting stock in pos checkout:', stockErr);
+      }
 
     }
 

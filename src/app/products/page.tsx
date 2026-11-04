@@ -388,7 +388,9 @@ export default function ProductsPage() {
         salePriceQar: parseFloat(editSalePrice) || 0,
         basePriceQar: parseFloat(editBasePrice || editSalePrice) || 0,
         costPriceQar: editingProduct.costPriceQar ?? (parseFloat(editCostPrice) || 0),
-        stockQuantity: editingProduct.stockQuantity ?? (parseInt(editStockQuantity, 10) || 0),
+        stockQuantity: (editingProduct.batches && editingProduct.batches.length > 0)
+          ? editingProduct.batches.reduce((sum, b) => sum + (b.quantity || 0), 0)
+          : (editingProduct.stockQuantity ?? (parseInt(editStockQuantity, 10) || 0)),
         minStockAlert: parseInt(editMinStockAlert, 10) || 3,
         sku: editSku.trim() || editingProduct.sku,
         barcode: editBarcode.trim() || null,
@@ -409,6 +411,7 @@ export default function ProductsPage() {
         const updated: ProductItem = {
           ...editingProduct,
           ...payload,
+          stockQuantity: data.product?.stockQuantity ?? payload.stockQuantity,
         };
         setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated : p)));
         setEditingProduct(null);

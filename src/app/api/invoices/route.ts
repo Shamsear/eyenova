@@ -171,15 +171,52 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // Restore stock
+        // Restore stock and sync batches/StoreStock
         if (refundStock && invoice.order?.items) {
           for (const item of invoice.order.items) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: {
-                stockQuantity: { increment: item.quantity },
-              },
+            const prodBatches = await tx.productBatch.findMany({
+              where: { productId: item.productId },
+              orderBy: [{ expiryDate: 'desc' }],
             });
+
+            if (prodBatches.length > 0) {
+              const pwrStr = item.power ? String(item.power).trim() : null;
+              const matchedBatch = (pwrStr ? prodBatches.find((b) => {
+                const bP = b.power ? b.power.trim() : '0.00';
+                const normBP = bP === '0.00' || bP.toLowerCase().includes('plano') ? '0.00' : bP;
+                const normP = pwrStr === '0.00' || pwrStr.toLowerCase().includes('plano') ? '0.00' : pwrStr;
+                return normBP === normP;
+              }) : null) || prodBatches[0];
+
+              if (matchedBatch) {
+                await tx.productBatch.update({
+                  where: { id: matchedBatch.id },
+                  data: { quantity: { increment: item.quantity } },
+                });
+              }
+
+              const refreshedBatches = await tx.productBatch.findMany({
+                where: { productId: item.productId },
+              });
+              const newTotal = refreshedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { stockQuantity: newTotal },
+              });
+              await tx.storeStock.updateMany({
+                where: { productId: item.productId },
+                data: { stockQuantity: newTotal },
+              });
+            } else {
+              await tx.product.update({
+                where: { id: item.productId },
+                data: { stockQuantity: { increment: item.quantity } },
+              });
+              await tx.storeStock.updateMany({
+                where: { productId: item.productId },
+                data: { stockQuantity: { increment: item.quantity } },
+              });
+            }
           }
         }
       }

@@ -964,83 +964,86 @@ export default function ProductsPage() {
             PRODUCT INSPECTOR & EDITOR MODAL (View, Edit & Manage Diopter Batches)
             ========================================================================= */}
         {editingProduct && (
-          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-              {/* Modal Top Header */}
-              <div className="p-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between shrink-0">
-                <div className="min-w-0 pr-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm text-stone-900 truncate">
+          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+              {/* Modal Top Title Bar */}
+              <div className="p-3 sm:p-3.5 bg-stone-50 border-b border-stone-200 flex items-start justify-between gap-2.5 shrink-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <h3 className="font-bold text-sm sm:text-base text-stone-900 leading-snug break-words">
                       {editingProduct.titleEn}
                     </h3>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 shrink-0">
                       {editingProduct.sku}
                     </span>
                   </div>
-                  <span className="text-[11px] text-stone-500 font-mono block truncate mt-0.5">
-                    Brand: {editingProduct.brandName || 'EyeNova'} · Stock: {editingProduct.stockQuantity} units
-                  </span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-500 font-mono mt-0.5">
+                    <span>Brand: {editingProduct.brandName || 'EyeNova'}</span>
+                    <span>·</span>
+                    <span>Stock: {editingProduct.stockQuantity} units</span>
+                  </div>
                 </div>
 
-                {/* Tab Switcher & Close */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="flex items-center bg-stone-200/80 p-0.5 rounded-lg text-xs font-medium">
-                    <button
-                      type="button"
-                      onClick={() => setModalTab('EDIT')}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                        modalTab === 'EDIT'
-                          ? 'bg-white text-stone-900 shadow-2xs font-semibold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      <Pencil size={11} />
-                      <span>Edit Info</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalTab('BATCHES')}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                        modalTab === 'BATCHES'
-                          ? 'bg-white text-stone-900 shadow-2xs font-semibold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      <Layers size={11} />
-                      <span>Batches ({editingProduct.batches?.length || 0})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalTab('TIERS')}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                        modalTab === 'TIERS'
-                          ? 'bg-white text-stone-900 shadow-2xs font-semibold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      <DollarSign size={11} />
-                      <span>Power Pricing ({editTiers.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalTab('VIEW')}
-                      className={`px-2.5 py-1 rounded-md transition cursor-pointer flex items-center gap-1 ${
-                        modalTab === 'VIEW'
-                          ? 'bg-white text-stone-900 shadow-2xs font-semibold'
-                          : 'text-stone-600 hover:text-stone-900'
-                      }`}
-                    >
-                      <Eye size={11} />
-                      <span>Specs</span>
-                    </button>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-200 transition cursor-pointer shrink-0 -mr-1 -mt-0.5"
+                  title="Close modal"
+                >
+                  <X size={18} />
+                </button>
+              </div>
 
+              {/* Modal Dedicated Tab Switcher (Horizontal scrollable, never overlaps or truncates) */}
+              <div className="px-3 sm:px-4 py-2 bg-stone-100/80 border-b border-stone-200 overflow-x-auto no-scrollbar shrink-0">
+                <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
                   <button
-                    onClick={() => setEditingProduct(null)}
-                    className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-200 transition cursor-pointer"
-                    title="Close"
+                    type="button"
+                    onClick={() => setModalTab('EDIT')}
+                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      modalTab === 'EDIT'
+                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                    }`}
                   >
-                    <X size={15} />
+                    <Pencil size={12} />
+                    <span>Edit Info</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalTab('BATCHES')}
+                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      modalTab === 'BATCHES'
+                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                    }`}
+                  >
+                    <Layers size={12} />
+                    <span>Batches ({editingProduct.batches?.length || 0})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalTab('TIERS')}
+                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      modalTab === 'TIERS'
+                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                    }`}
+                  >
+                    <DollarSign size={12} />
+                    <span>Power Pricing ({editTiers.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalTab('VIEW')}
+                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      modalTab === 'VIEW'
+                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
+                    }`}
+                  >
+                    <Eye size={12} />
+                    <span>Specs</span>
                   </button>
                 </div>
               </div>
@@ -1345,22 +1348,24 @@ export default function ProductsPage() {
                       {editingProduct.batches && editingProduct.batches.length > 0 ? (
                         <div className="border border-stone-200 rounded-lg divide-y divide-stone-100 max-h-56 overflow-y-auto">
                           {editingProduct.batches.map((b) => (
-                            <div key={b.id} className="p-2.5 flex items-center justify-between text-xs font-mono hover:bg-stone-50 transition">
-                              <div>
-                                <span className="font-semibold text-stone-900">{b.batchNumber}</span>
-                                <span className="ml-2 text-stone-600">
-                                  PWR: {b.power || 'Plano'}
-                                  {b.cylinder ? ` · CYL: ${b.cylinder}` : ''}
-                                  {b.axis ? ` · AX: ${b.axis}°` : ''}
-                                </span>
-                                {b.expiryDate && (
-                                  <span className="ml-2 text-stone-400 text-[11px]">
-                                    Exp: {formatQatarDate(b.expiryDate)}
+                            <div key={b.id} className="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs font-mono hover:bg-stone-50 transition">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span className="font-semibold text-stone-900">{b.batchNumber}</span>
+                                  <span className="text-stone-600">
+                                    PWR: {b.power || 'Plano'}
+                                    {b.cylinder ? ` · CYL: ${b.cylinder}` : ''}
+                                    {b.axis ? ` · AX: ${b.axis}°` : ''}
                                   </span>
-                                )}
+                                  {b.expiryDate && (
+                                    <span className="text-stone-400 text-[11px]">
+                                      Exp: {formatQatarDate(b.expiryDate)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 sm:pt-0 border-t border-stone-100 sm:border-t-0 shrink-0">
                                 <span className="font-semibold text-stone-900 tabular-nums">
                                   {b.quantity} pcs
                                 </span>
@@ -1392,7 +1397,7 @@ export default function ProductsPage() {
                       </div>
 
                       {/* Quick Presets */}
-                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                         <span className="text-[10px] font-semibold text-purple-900">Presets:</span>
                         <button
                           type="button"
@@ -1433,61 +1438,117 @@ export default function ProductsPage() {
 
                       {editTiers.length > 0 && (
                         <div className="border border-stone-200 rounded-lg overflow-hidden bg-white shadow-2xs divide-y divide-stone-100">
-                          <div className="grid grid-cols-12 gap-2 p-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
+                          {/* Desktop Grid Header */}
+                          <div className="hidden sm:grid sm:grid-cols-12 gap-2 p-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wider">
                             <div className="col-span-4">Tier Name</div>
-                            <div className="col-span-3">Power Range / Condition</div>
+                            <div className="col-span-4">Power Range / Condition</div>
                             <div className="col-span-3 text-right">Retail Price (QAR)</div>
-                            <div className="col-span-2 text-center">Action</div>
+                            <div className="col-span-1 text-center">Action</div>
                           </div>
 
                           {editTiers.map((tier) => (
-                            <div key={tier.id} className="grid grid-cols-12 gap-2 p-2.5 items-center text-xs hover:bg-stone-50/50 transition">
-                              <div className="col-span-4 font-medium text-stone-900 truncate flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" />
-                                <span className="truncate">{tier.name}</span>
+                            <div key={tier.id} className="p-3 sm:p-2.5 hover:bg-stone-50/50 transition">
+                              {/* Mobile Stacked Card View - No truncation, fully readable */}
+                              <div className="sm:hidden space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="font-semibold text-stone-900 text-xs flex items-center gap-1.5 min-w-0 flex-1">
+                                    <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
+                                    <span className="break-words leading-tight">{tier.name}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTier(tier.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded shrink-0 transition cursor-pointer"
+                                    title="Remove Tier"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-100 font-mono text-xs">
+                                  <div className="text-[11px] text-stone-600">
+                                    {tier.requiresCylinder ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                        Toric (Cyl)
+                                      </span>
+                                    ) : tier.requiresAdd ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                                        Multifocal (Add)
+                                      </span>
+                                    ) : (tier.minPower === 0 && tier.maxPower === 0) || tier.name.toLowerCase().includes('plano') ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                        Plano 0.00
+                                      </span>
+                                    ) : tier.minPower !== null && tier.minPower !== undefined && tier.maxPower !== null && tier.maxPower !== undefined ? (
+                                      <span className="font-semibold">{tier.minPower > 0 ? `+${tier.minPower}` : tier.minPower} to {tier.maxPower > 0 ? `+${tier.maxPower}` : tier.maxPower}</span>
+                                    ) : (
+                                      <span className="text-stone-400 italic">All powers</span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0 font-mono">
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      min="0"
+                                      value={tier.priceQar}
+                                      onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
+                                      className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
+                                    />
+                                    <span className="text-[10px] text-stone-500 font-semibold">QAR</span>
+                                  </div>
+                                </div>
                               </div>
 
-                              <div className="col-span-3 font-mono text-[11px] text-stone-600">
-                                {tier.requiresCylinder ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
-                                    Toric (Cyl)
-                                  </span>
-                                ) : tier.requiresAdd ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
-                                    Multifocal (Add)
-                                  </span>
-                                ) : (tier.minPower === 0 && tier.maxPower === 0) || tier.name.toLowerCase().includes('plano') ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                                    Plano 0.00
-                                  </span>
-                                ) : tier.minPower !== null && tier.minPower !== undefined && tier.maxPower !== null && tier.maxPower !== undefined ? (
-                                  <span>{tier.minPower > 0 ? `+${tier.minPower}` : tier.minPower} to {tier.maxPower > 0 ? `+${tier.maxPower}` : tier.maxPower}</span>
-                                ) : (
-                                  <span className="text-stone-400 italic">All powers</span>
-                                )}
-                              </div>
+                              {/* Desktop Table Grid View */}
+                              <div className="hidden sm:grid sm:grid-cols-12 gap-2 items-center text-xs">
+                                <div className="col-span-4 font-medium text-stone-900 truncate flex items-center gap-1.5 min-w-0" title={tier.name}>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" />
+                                  <span className="truncate">{tier.name}</span>
+                                </div>
 
-                              <div className="col-span-3 flex justify-end items-center gap-1 font-mono">
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0"
-                                  value={tier.priceQar}
-                                  onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
-                                  className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
-                                />
-                                <span className="text-[10px] text-stone-500">QAR</span>
-                              </div>
+                                <div className="col-span-4 font-mono text-[11px] text-stone-600">
+                                  {tier.requiresCylinder ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                      Toric (Cyl)
+                                    </span>
+                                  ) : tier.requiresAdd ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-semibold">
+                                      Multifocal (Add)
+                                    </span>
+                                  ) : (tier.minPower === 0 && tier.maxPower === 0) || tier.name.toLowerCase().includes('plano') ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                                      Plano 0.00
+                                    </span>
+                                  ) : tier.minPower !== null && tier.minPower !== undefined && tier.maxPower !== null && tier.maxPower !== undefined ? (
+                                    <span>{tier.minPower > 0 ? `+${tier.minPower}` : tier.minPower} to {tier.maxPower > 0 ? `+${tier.maxPower}` : tier.maxPower}</span>
+                                  ) : (
+                                    <span className="text-stone-400 italic">All powers</span>
+                                  )}
+                                </div>
 
-                              <div className="col-span-2 flex justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveTier(tier.id)}
-                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
-                                  title="Remove Tier"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
+                                <div className="col-span-3 flex justify-end items-center gap-1 font-mono">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0"
+                                    value={tier.priceQar}
+                                    onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
+                                    className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
+                                  />
+                                  <span className="text-[10px] text-stone-500 font-semibold">QAR</span>
+                                </div>
+
+                                <div className="col-span-1 flex justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveTier(tier.id)}
+                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
+                                    title="Remove Tier"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1558,8 +1619,8 @@ export default function ProductsPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex items-center gap-4 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
                           <label className="flex items-center gap-1.5 cursor-pointer select-none text-stone-700">
                             <input
                               type="checkbox"
@@ -1626,7 +1687,7 @@ export default function ProductsPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-stone-50 p-3 rounded-lg border border-stone-200 text-xs">
                       <div>
                         <span className="text-stone-400 text-[10px] block">Category</span>
-                        <span className="font-medium text-stone-800">{formatCategoryLabel(editingProduct.productType)}</span>
+                        <span className="font-medium text-stone-800 break-words">{formatCategoryLabel(editingProduct.productType)}</span>
                       </div>
                       <div>
                         <span className="text-stone-400 text-[10px] block">Retail Price</span>
@@ -1640,7 +1701,7 @@ export default function ProductsPage() {
                       </div>
                       <div>
                         <span className="text-stone-400 text-[10px] block">Barcode</span>
-                        <span className="font-mono text-stone-800">{editingProduct.barcode || 'N/A'}</span>
+                        <span className="font-mono text-stone-800 break-all">{editingProduct.barcode || 'N/A'}</span>
                       </div>
                     </div>
 
@@ -1682,8 +1743,8 @@ export default function ProductsPage() {
             CREATE NEW PRODUCT MODAL (+ New Product)
             ========================================================================= */}
         {isCreateModalOpen && (
-          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col">
+          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col">
               <div className="p-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-sm text-stone-900">Add New Product to Catalog</h3>

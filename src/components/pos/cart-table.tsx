@@ -494,12 +494,25 @@ export function CartTable() {
           })}
         </div>
         {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) && (
-          <div className="flex items-center justify-between px-2 py-0.5 bg-amber-50 border border-amber-200/80 rounded text-[10px] text-amber-900 mt-1">
+          <div className="flex items-center justify-between px-2 py-1 bg-amber-50 border border-amber-200/80 rounded text-[10px] text-amber-900 mt-1">
             <span className="flex items-center gap-1 font-medium">
               <Truck size={11} className="text-amber-700 shrink-0" />
               <span>{orderChannel} Platform Receivable (Pending Settlement)</span>
             </span>
-            <span className="text-[9px] text-amber-700">Commission reconciled at payout</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleToggleDeliveryFee}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition cursor-pointer ${
+                  deliveryFee > 0
+                    ? 'bg-amber-200 text-amber-950 border border-amber-300 font-bold'
+                    : 'bg-white border border-amber-300 text-amber-800 hover:bg-amber-100'
+                }`}
+                title="Click to toggle standard 10 QAR delivery fee"
+              >
+                {deliveryFee > 0 ? 'Deliv: 10 QAR (✕ Clear)' : '+10 Delivery'}
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -563,9 +563,37 @@ export function EditInvoiceModal({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-stone-600 mb-1">
-                    Delivery / التوصيل (QAR)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-medium text-stone-600">
+                      Delivery / التوصيل (QAR)
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryFeeQar(10)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition cursor-pointer ${
+                          deliveryFeeQar === 10
+                            ? 'bg-stone-900 text-white font-bold'
+                            : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                        }`}
+                        title="Apply 10 QAR delivery fee"
+                      >
+                        +10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeliveryFeeQar(0)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition cursor-pointer ${
+                          deliveryFeeQar === 0
+                            ? 'bg-stone-900 text-white font-bold'
+                            : 'bg-stone-200 text-stone-700 hover:bg-stone-300'
+                        }`}
+                        title="Set delivery to Free / 0 QAR"
+                      >
+                        Free (0)
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="number"
                     min="0"

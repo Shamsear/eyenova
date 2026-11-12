@@ -63,6 +63,9 @@ export function AggregatorSettlementModal({
   const [commissionTotal, setCommissionTotal] = useState<string>('0.00');
   const [commissionPercentTotal, setCommissionPercentTotal] = useState<string>('0.00');
   const [statementRef, setStatementRef] = useState<string>('');
+  const [settledDate, setSettledDate] = useState<string>(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Qatar' })
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -121,7 +124,9 @@ export function AggregatorSettlementModal({
       setNetReceivedTotal(totalGross.toFixed(2));
       setCommissionTotal('0.00');
       setCommissionPercentTotal('0.00');
-      setStatementRef(`${platform}-PAYOUT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`);
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Qatar' });
+      setSettledDate(todayStr);
+      setStatementRef(`${platform}-PAYOUT-${todayStr.replace(/-/g, '')}`);
       setErrorMessage('');
       setSuccessMessage('');
     }
@@ -611,6 +616,7 @@ export function AggregatorSettlementModal({
           netAmountReceived: net,
           commissionAmount: comm,
           statementRef: statementRef.trim() || undefined,
+          settledDate,
           bills: payloadBills,
         }),
       });
@@ -976,17 +982,36 @@ export function AggregatorSettlementModal({
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                    Statement Ref / Bank Reference # / رقم كشف الحساب:
-                  </label>
-                  <input
-                    type="text"
-                    value={statementRef}
-                    onChange={(e) => setStatementRef(e.target.value)}
-                    placeholder="e.g. SNOONU-OCT-WEEK4"
-                    className="w-full h-8 px-3 text-xs font-mono bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-bold text-stone-800 block mb-1">
+                      Statement Ref / Bank Reference # / رقم كشف الحساب:
+                    </label>
+                    <input
+                      type="text"
+                      value={statementRef}
+                      onChange={(e) => setStatementRef(e.target.value)}
+                      placeholder="e.g. SNOONU-OCT-WEEK4"
+                      className="w-full h-8 px-3 text-xs font-mono bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-800 block mb-1">
+                      Payout / Commission Date*:
+                    </label>
+                    <input
+                      type="date"
+                      value={settledDate}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSettledDate(val);
+                        if (/^(SNOONU|TALABAT|RAFEEQ)-PAYOUT-\d{8}$/.test(statementRef)) {
+                          setStatementRef(`${platform}-PAYOUT-${val.replace(/-/g, '')}`);
+                        }
+                      }}
+                      className="w-full h-8 px-2.5 text-xs font-mono bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
+                    />
+                  </div>
                 </div>
               </div>
 

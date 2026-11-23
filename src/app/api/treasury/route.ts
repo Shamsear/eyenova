@@ -24,19 +24,32 @@ export async function GET() {
     });
 
     const formattedMovements = movements.map((m) => {
+      let amount = Math.abs(Number(m.amountQar));
+      if (m.txType === 'BANK_CASH_TRANSFER' && amount === 0) {
+        amount = Math.max(
+          Math.abs(Number(m.cashAmountQar || 0)),
+          Math.abs(Number(m.bankAmountQar || 0))
+        );
+      }
+
       const isIncoming =
         m.txType === 'SALE_REVENUE' ||
         m.txType === 'SHOPIFY_SALE' ||
         m.txType === 'CAPITAL_TOPUP' ||
-        Number(m.amountQar) >= 0;
+        Number(m.amountQar) > 0;
 
       return {
         id: m.id,
         timestamp: formatQatarDateTime(m.timestamp),
         type: m.txType,
         channel: m.paymentChannel || 'CASH',
-        amount: Math.abs(Number(m.amountQar)),
-        direction: isIncoming ? ('IN' as const) : ('OUT' as const),
+        amount,
+        direction:
+          m.txType === 'BANK_CASH_TRANSFER'
+            ? ('TRANSFER' as const)
+            : isIncoming
+            ? ('IN' as const)
+            : ('OUT' as const),
         operator: m.operatorName || 'System Admin',
         notes: m.notes || m.referenceType || 'Financial Transaction',
       };

@@ -409,6 +409,11 @@ export async function POST(req: NextRequest) {
 
 
       // Deduct from ProductBatch if batches exist, and atomically sync Product & StoreStock
+      // Note: Online contact lens orders are procured on-demand from the supplier and do NOT deplete physical store shelf batches
+      if (isOnline && (line.power || line.isPlano || line.eye !== '')) {
+        continue;
+      }
+
       try {
         const prodBatches = await prisma.productBatch.findMany({
           where: { productId: line.productId },

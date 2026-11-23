@@ -27,6 +27,7 @@ import {
   Minimize2,
   SlidersHorizontal,
   Lock,
+  History,
 } from 'lucide-react';
 
 interface NavSection {
@@ -54,6 +55,7 @@ const navSections: NavSection[] = [
     items: [
       { title: 'Product Catalog', href: '/products', icon: Package, shortcut: 'Ctrl+4' },
       { title: 'Purchases & Inbound', href: '/purchases', icon: Truck, shortcut: 'Ctrl+5' },
+      { title: 'Stock Cardex', href: '/cardex', icon: History, shortcut: 'F6' },
       { title: 'FEFO Batches', href: '/batches', icon: CalendarClock, shortcut: 'Ctrl+6' },
       { title: 'Physical Stock Audit', href: '/stock-count', icon: ClipboardCheck, shortcut: 'Ctrl+7' },
       { title: 'Online Stock Matrix', href: '/online-stock', icon: SlidersHorizontal, shortcut: 'Ctrl+0', adminOnly: true },

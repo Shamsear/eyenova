@@ -52,20 +52,116 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, action, trackingNumber } = body;
+    const { orderId, action, trackingNumber, operatorName } = body;
 
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
-    if (action === 'DISPATCH') {
+    if (action === 'DISPATCH' || action === 'DELIVER') {
+      const targetStatus = action === 'DELIVER' ? 'DELIVERED' : 'OUT_FOR_DELIVERY';
+
+      // 1. Fetch order and unfulfilled items
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: {
+            include: { product: { include: { batches: true } } },
+          },
+        },
+      });
+
+      if (!order) {
+        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      }
+
+      // 2. Fulfill shelf inventory for unallocated items
+      const now = new Date();
+      for (const item of order.items) {
+        if (!item.batchId && !item.isBackorder) {
+          const product = item.product;
+          if (product && product.batches.length > 0) {
+            // Find active matching batch (FEFO)
+            const activeBatches = product.batches
+              .filter(b => (!b.status || b.status === 'ACTIVE') && (!b.expiryDate || b.expiryDate >= now) && b.quantity > 0)
+              .sort((a, b) => (a.expiryDate?.getTime() || 0) - (b.expiryDate?.getTime() || 0));
+
+            let matchedBatch = null;
+            if (item.power !== null && item.power !== undefined) {
+              const itemPwrNum = Number(item.power);
+              matchedBatch = activeBatches.find(b => {
+                if (!b.power) return false;
+                const bNum = parseFloat(b.power.replace('+', ''));
+                return !isNaN(bNum) && Math.abs(bNum - itemPwrNum) < 0.001;
+              });
+            } else if (item.isPlano) {
+              matchedBatch = activeBatches.find(b => !b.power || b.power.includes('0.00') || b.power.toLowerCase().includes('plano'));
+            } else {
+              matchedBatch = activeBatches[0];
+            }
+
+            if (matchedBatch) {
+              const newBatchQty = Math.max(0, matchedBatch.quantity - item.quantity);
+              await prisma.productBatch.update({
+                where: { id: matchedBatch.id },
+                data: { quantity: newBatchQty, updatedAt: now },
+              });
+
+              await prisma.orderItem.update({
+                where: { id: item.id },
+                data: { batchId: matchedBatch.id, isBackorder: false },
+              });
+
+              // Sync StoreStock & Product
+              const newActiveSum = product.batches.reduce((sum, b) => {
+                if (b.id === matchedBatch.id) return sum + newBatchQty;
+                if ((!b.status || b.status === 'ACTIVE') && (!b.expiryDate || b.expiryDate >= now)) return sum + b.quantity;
+                return sum;
+              }, 0);
+
+              await prisma.storeStock.upsert({
+                where: { storeId_productId: { storeId: 'STORE-MAIN', productId: product.id } },
+                update: { stockQuantity: newActiveSum, updatedAt: now },
+                create: { storeId: 'STORE-MAIN', productId: product.id, stockQuantity: newActiveSum },
+              });
+
+              await prisma.product.update({
+                where: { id: product.id },
+                data: { stockQuantity: newActiveSum, updatedAt: now },
+              });
+
+              await prisma.stockAdjustment.create({
+                data: {
+                  id: `ADJ-WEB-${Date.now()}-${item.id.slice(-4)}`,
+                  productId: product.id,
+                  storeId: 'STORE-MAIN',
+                  batchId: matchedBatch.id,
+                  systemQty: product.stockQuantity,
+                  countedQty: newActiveSum,
+                  deltaQty: -item.quantity,
+                  reason: 'ONLINE_DELIVERY',
+                  note: `Online Order ${order.orderNumber} delivered by ${operatorName || 'Staff'} (Qty: ${item.quantity})`,
+                },
+              });
+            } else {
+              // No matching batch on shelf (on-demand contact lens / special order)
+              await prisma.orderItem.update({
+                where: { id: item.id },
+                data: { isBackorder: true },
+              });
+            }
+          }
+        }
+      }
+
       const updated = await prisma.order.update({
         where: { id: orderId },
         data: {
-          orderStatus: 'OUT_FOR_DELIVERY',
-          trackingNumber: trackingNumber || null,
+          orderStatus: targetStatus,
+          trackingNumber: trackingNumber || undefined,
         },
       });
+
       return NextResponse.json({ success: true, order: updated });
     }
 

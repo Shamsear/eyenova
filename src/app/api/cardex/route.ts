@@ -610,10 +610,75 @@ export async function GET(req: NextRequest) {
       isBalanced,
     };
 
+    // 5. Aggregate Available Powers & Physical Stock Matrix
+    const powerMap = new Map<string, { power: string; shelfQuantity: number; activeBatchCount: number; earliestExpiry: Date | null }>();
+
+    if (product.availablePowers) {
+      try {
+        const rawP = typeof product.availablePowers === 'string' ? JSON.parse(product.availablePowers as string) : product.availablePowers;
+        if (Array.isArray(rawP)) {
+          rawP.forEach((p: any) => {
+            const norm = normalizePower(typeof p === 'string' ? p : p.power);
+            if (!powerMap.has(norm)) {
+              powerMap.set(norm, { power: norm, shelfQuantity: 0, activeBatchCount: 0, earliestExpiry: null });
+            }
+          });
+        }
+      } catch {}
+    }
+
+    batches.forEach((b) => {
+      const norm = normalizePower(b.power);
+      const existing = powerMap.get(norm) || { power: norm, shelfQuantity: 0, activeBatchCount: 0, earliestExpiry: null };
+      const qty = b.quantity || 0;
+      existing.shelfQuantity += qty;
+      if (qty > 0) {
+        existing.activeBatchCount += 1;
+        if (b.expiryDate) {
+          const exp = new Date(b.expiryDate);
+          if (!existing.earliestExpiry || exp < existing.earliestExpiry) {
+            existing.earliestExpiry = exp;
+          }
+        }
+      }
+      powerMap.set(norm, existing);
+    });
+
+    const costPrice = Number(product.costPriceQar) || 0;
+    const powerStockSummaries = sortPowers(Array.from(powerMap.keys())).map((pKey) => {
+      const item = powerMap.get(pKey)!;
+      const expDate = item.earliestExpiry;
+      let statusBadgeText = item.shelfQuantity === 0 ? 'OUT OF STOCK' : item.shelfQuantity <= 2 ? 'LOW STOCK' : 'IN STOCK';
+      let statusBadgeVariant: 'success' | 'warning' | 'danger' | 'default' = item.shelfQuantity === 0 ? 'default' : item.shelfQuantity <= 2 ? 'warning' : 'success';
+
+      if (expDate && item.shelfQuantity > 0) {
+        if (expDate < now) {
+          statusBadgeText = 'EXPIRED LOT';
+          statusBadgeVariant = 'danger';
+        } else if (expDate <= ninetyDays) {
+          statusBadgeText = 'NEAR EXPIRY';
+          statusBadgeVariant = 'warning';
+        }
+      }
+
+      return {
+        power: item.power,
+        shelfQuantity: item.shelfQuantity,
+        activeBatchCount: item.activeBatchCount,
+        unitCostQar: costPrice,
+        totalValueQar: item.shelfQuantity * costPrice,
+        earliestExpiry: expDate ? expDate.toISOString() : null,
+        isInStock: item.shelfQuantity > 0,
+        statusBadgeText,
+        statusBadgeVariant,
+      };
+    });
+
     return NextResponse.json({
       summary,
       activeBatches,
       entries: finalEntries,
+      powerStockSummaries,
     });
   } catch (error: any) {
     console.error('Cardex API Error:', error);

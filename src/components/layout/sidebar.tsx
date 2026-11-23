@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
   Lock,
   History,
+  Layers,
 } from 'lucide-react';
 
 interface NavSection {
@@ -64,8 +65,9 @@ const navSections: NavSection[] = [
   {
     title: 'FINANCIAL & TREASURY',
     items: [
-      { title: 'Company Treasury', href: '/treasury', icon: Landmark, shortcut: 'Ctrl+8', adminOnly: true },
-      { title: 'Store Expenses', href: '/expenses', icon: Wallet, shortcut: 'Ctrl+9' },
+      { title: 'Channels & Snoonu Profit', href: '/channels', icon: Layers, shortcut: 'Ctrl+8' },
+      { title: 'Company Treasury', href: '/treasury', icon: Landmark, shortcut: 'Ctrl+9', adminOnly: true },
+      { title: 'Store Expenses', href: '/expenses', icon: Wallet, shortcut: 'Ctrl+0' },
       { title: 'Financial Reports', href: '/reports', icon: BarChart3, shortcut: 'F4', adminOnly: true },
     ],
   },

@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 
       const products = await prisma.product.findMany({
         where,
-        take: 50,
+        take: 500,
         orderBy: [{ brandName: 'asc' }, { titleEn: 'asc' }],
         select: {
           id: true,

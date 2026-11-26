@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { usePosStore } from '@/stores/pos-store';
-import { X, Sparkles, Eye, Check } from 'lucide-react';
+import { ProductItem } from '@/lib/types';
+import { Eye, Check } from 'lucide-react';
 import {
-  formatQar,
   getEffectivePriceForPower,
   STANDARD_POWERS,
   STANDARD_CYLINDERS,
@@ -12,37 +12,17 @@ import {
   STANDARD_ADDS,
 } from '@/lib/utils';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
-import { motion } from 'motion/react';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { TouchStepper } from '@/components/ui/touch-stepper';
 import { AnimatedCount, AnimatedQar } from '@/components/shared/animated-number';
 
-export function LensConfigModal() {
-  const { isLensConfigModalOpen, selectedProductForConfig, setLensConfigModalOpen, addLine, showToast } =
-    usePosStore();
+function LensConfigModalBody({ product }: { product: ProductItem }) {
+  const { setLensConfigModalOpen, addLine, showToast } = usePosStore();
 
-  const [mode, setMode] = useState<'BOTH' | 'OD_ONLY' | 'OS_ONLY'>('BOTH');
-
-  // Right Eye (OD)
-  const [odPower, setOdPower] = useState('0.00');
-  const [odCyl, setOdCyl] = useState<string>('');
-  const [odAxis, setOdAxis] = useState<number | null>(null);
-  const [odAdd, setOdAdd] = useState<string>('');
-  const [odBoxes, setOdBoxes] = useState(1);
-  const [odIsPlano, setOdIsPlano] = useState(false);
-
-  // Left Eye (OS)
-  const [osPower, setOsPower] = useState('0.00');
-  const [osCyl, setOsCyl] = useState<string>('');
-  const [osAxis, setOsAxis] = useState<number | null>(null);
-  const [osAdd, setOsAdd] = useState<string>('');
-  const [osBoxes, setOsBoxes] = useState(1);
-  const [osIsPlano, setOsIsPlano] = useState(false);
-
-  // 1. In-stock batches for the selected product
   const inStockBatches = useMemo(() => {
-    return (selectedProductForConfig?.batches || []).filter((b) => b.quantity > 0);
-  }, [selectedProductForConfig?.batches]);
+    return (product.batches || []).filter((b) => b.quantity > 0);
+  }, [product.batches]);
 
-  // 2. Extract in-stock powers, counts, and plano availability
   const { inStockPowers, inStockPowerCounts, isPlanoInStock } = useMemo(() => {
     if (inStockBatches.length > 0) {
       const counts: Record<string, number> = {};
@@ -64,35 +44,47 @@ export function LensConfigModal() {
         .sort((a, b) => {
           const numA = parseFloat(a);
           const numB = parseFloat(b);
-          if (!isNaN(numA) && !isNaN(numB)) {
-            return numB - numA;
-          }
+          if (!isNaN(numA) && !isNaN(numB)) return numB - numA;
           return a.localeCompare(b);
         });
 
-      if (planoAvailable) {
-        sorted.unshift('0.00');
-      }
-
+      if (planoAvailable) sorted.unshift('0.00');
       return { inStockPowers: sorted, inStockPowerCounts: counts, isPlanoInStock: planoAvailable };
     }
 
     const fallbackPowers =
-      selectedProductForConfig?.availablePowers && selectedProductForConfig.availablePowers.length > 0
-        ? selectedProductForConfig.availablePowers
+      product.availablePowers && product.availablePowers.length > 0
+        ? product.availablePowers
         : STANDARD_POWERS;
 
     return {
       inStockPowers: fallbackPowers,
       inStockPowerCounts: {},
-      isPlanoInStock: selectedProductForConfig?.hasPlanoOption ?? true,
+      isPlanoInStock: product.hasPlanoOption ?? true,
     };
-  }, [inStockBatches, selectedProductForConfig]);
+  }, [inStockBatches, product]);
 
-  // OD Matching Batches for selected OD Power
+  const firstValid = inStockPowers[0] || '0.00';
+  const initialIsPlano = firstValid === '0.00' || firstValid.toLowerCase().includes('plano');
+
+  const [mode, setMode] = useState<'BOTH' | 'OD_ONLY' | 'OS_ONLY'>('BOTH');
+  const [odPower, setOdPower] = useState(initialIsPlano ? '0.00' : firstValid);
+  const [odCyl, setOdCyl] = useState<string>('');
+  const [odAxis, setOdAxis] = useState<number | null>(null);
+  const [odAdd, setOdAdd] = useState<string>('');
+  const [odBoxes, setOdBoxes] = useState(1);
+  const [odIsPlano, setOdIsPlano] = useState(initialIsPlano);
+
+  const [osPower, setOsPower] = useState(initialIsPlano ? '0.00' : firstValid);
+  const [osCyl, setOsCyl] = useState<string>('');
+  const [osAxis, setOsAxis] = useState<number | null>(null);
+  const [osAdd, setOsAdd] = useState<string>('');
+  const [osBoxes, setOsBoxes] = useState(1);
+  const [osIsPlano, setOsIsPlano] = useState(initialIsPlano);
+
   const odMatchingPowerBatches = useMemo(() => {
     if (inStockBatches.length === 0) return [];
-    const currP = odIsPlano ? '0.00' : (odPower || '0.00');
+    const currP = odIsPlano ? '0.00' : odPower || '0.00';
     return inStockBatches.filter((b) => {
       const bP = b.power ? b.power.trim() : '0.00';
       const normBP = bP === '0.00' || bP.toLowerCase().includes('plano') ? '0.00' : bP;
@@ -101,7 +93,6 @@ export function LensConfigModal() {
     });
   }, [inStockBatches, odIsPlano, odPower]);
 
-  // OD Available Cylinders
   const { odAvailableCylinders, odCylCounts, odHasNoCylinderOption } = useMemo(() => {
     if (odMatchingPowerBatches.length > 0) {
       const counts: Record<string, number> = {};
@@ -120,7 +111,6 @@ export function LensConfigModal() {
     return { odAvailableCylinders: STANDARD_CYLINDERS, odCylCounts: {}, odHasNoCylinderOption: true };
   }, [odMatchingPowerBatches]);
 
-  // OD Matching Batches for Power + Cylinder
   const odMatchingCylBatches = useMemo(() => {
     if (odMatchingPowerBatches.length === 0) return [];
     const currCyl = odCyl ? odCyl.trim() : null;
@@ -130,7 +120,6 @@ export function LensConfigModal() {
     });
   }, [odMatchingPowerBatches, odCyl]);
 
-  // OD Available Axes
   const { odAvailableAxes, odAxisCounts, odHasNoAxisOption } = useMemo(() => {
     if (odMatchingCylBatches.length > 0) {
       const counts: Record<number, number> = {};
@@ -148,10 +137,9 @@ export function LensConfigModal() {
     return { odAvailableAxes: STANDARD_AXES, odAxisCounts: {}, odHasNoAxisOption: true };
   }, [odMatchingCylBatches]);
 
-  // OS Matching Batches for selected OS Power
   const osMatchingPowerBatches = useMemo(() => {
     if (inStockBatches.length === 0) return [];
-    const currP = osIsPlano ? '0.00' : (osPower || '0.00');
+    const currP = osIsPlano ? '0.00' : osPower || '0.00';
     return inStockBatches.filter((b) => {
       const bP = b.power ? b.power.trim() : '0.00';
       const normBP = bP === '0.00' || bP.toLowerCase().includes('plano') ? '0.00' : bP;
@@ -160,7 +148,6 @@ export function LensConfigModal() {
     });
   }, [inStockBatches, osIsPlano, osPower]);
 
-  // OS Available Cylinders
   const { osAvailableCylinders, osCylCounts, osHasNoCylinderOption } = useMemo(() => {
     if (osMatchingPowerBatches.length > 0) {
       const counts: Record<string, number> = {};
@@ -179,7 +166,6 @@ export function LensConfigModal() {
     return { osAvailableCylinders: STANDARD_CYLINDERS, osCylCounts: {}, osHasNoCylinderOption: true };
   }, [osMatchingPowerBatches]);
 
-  // OS Matching Batches for Power + Cylinder
   const osMatchingCylBatches = useMemo(() => {
     if (osMatchingPowerBatches.length === 0) return [];
     const currCyl = osCyl ? osCyl.trim() : null;
@@ -189,7 +175,6 @@ export function LensConfigModal() {
     });
   }, [osMatchingPowerBatches, osCyl]);
 
-  // OS Available Axes
   const { osAvailableAxes, osAxisCounts, osHasNoAxisOption } = useMemo(() => {
     if (osMatchingCylBatches.length > 0) {
       const counts: Record<number, number> = {};
@@ -283,25 +268,7 @@ export function LensConfigModal() {
     }
   };
 
-  useEffect(() => {
-    if (selectedProductForConfig) {
-      const firstValid = inStockPowers[0] || '0.00';
-      const isPlano = firstValid === '0.00' || firstValid.toLowerCase().includes('plano');
-      setOdPower(isPlano ? '0.00' : firstValid);
-      setOsPower(isPlano ? '0.00' : firstValid);
-      setOdIsPlano(isPlano);
-      setOsIsPlano(isPlano);
-      setOdCyl('');
-      setOsCyl('');
-      setOdAxis(null);
-      setOsAxis(null);
-      setOdBoxes(1);
-      setOsBoxes(1);
-      setMode('BOTH');
-    }
-  }, [selectedProductForConfig, inStockPowers]);
-
-  const odPowerOptions = useMemo<SelectOption[]>(() => {
+  const powerOptions = useMemo<SelectOption[]>(() => {
     return inStockPowers
       .filter((p) => p !== '0.00' && !p.toLowerCase().includes('plano'))
       .map((p) => {
@@ -316,25 +283,17 @@ export function LensConfigModal() {
 
   const odCylOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [];
-    if (odHasNoCylinderOption) {
-      opts.push({ value: '', label: 'None (—)' });
-    }
+    if (odHasNoCylinderOption) opts.push({ value: '', label: 'None (—)' });
     odAvailableCylinders.forEach((c) => {
       const count = odCylCounts[c];
-      opts.push({
-        value: c,
-        label: c,
-        subtext: count ? `${count} in stock` : undefined,
-      });
+      opts.push({ value: c, label: c, subtext: count ? `${count} in stock` : undefined });
     });
     return opts;
   }, [odHasNoCylinderOption, odAvailableCylinders, odCylCounts]);
 
   const odAxisOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [];
-    if (odHasNoAxisOption) {
-      opts.push({ value: '', label: 'None (—)' });
-    }
+    if (odHasNoAxisOption) opts.push({ value: '', label: 'None (—)' });
     odAvailableAxes.forEach((a) => {
       const count = odAxisCounts[a];
       opts.push({
@@ -346,40 +305,19 @@ export function LensConfigModal() {
     return opts;
   }, [odHasNoAxisOption, odAvailableAxes, odAxisCounts]);
 
-  const osPowerOptions = useMemo<SelectOption[]>(() => {
-    return inStockPowers
-      .filter((p) => p !== '0.00' && !p.toLowerCase().includes('plano'))
-      .map((p) => {
-        const count = inStockPowerCounts[p];
-        return {
-          value: p,
-          label: p,
-          subtext: count ? `${count} in stock` : undefined,
-        };
-      });
-  }, [inStockPowers, inStockPowerCounts]);
-
   const osCylOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [];
-    if (osHasNoCylinderOption) {
-      opts.push({ value: '', label: 'None (—)' });
-    }
+    if (osHasNoCylinderOption) opts.push({ value: '', label: 'None (—)' });
     osAvailableCylinders.forEach((c) => {
       const count = osCylCounts[c];
-      opts.push({
-        value: c,
-        label: c,
-        subtext: count ? `${count} in stock` : undefined,
-      });
+      opts.push({ value: c, label: c, subtext: count ? `${count} in stock` : undefined });
     });
     return opts;
   }, [osHasNoCylinderOption, osAvailableCylinders, osCylCounts]);
 
   const osAxisOptions = useMemo<SelectOption[]>(() => {
     const opts: SelectOption[] = [];
-    if (osHasNoAxisOption) {
-      opts.push({ value: '', label: 'None (—)' });
-    }
+    if (osHasNoAxisOption) opts.push({ value: '', label: 'None (—)' });
     osAvailableAxes.forEach((a) => {
       const count = osAxisCounts[a];
       opts.push({
@@ -392,56 +330,41 @@ export function LensConfigModal() {
   }, [osHasNoAxisOption, osAvailableAxes, osAxisCounts]);
 
   const addOptions = useMemo<SelectOption[]>(() => {
-    return [
-      { value: '', label: 'None' },
-      ...STANDARD_ADDS.map((ad) => ({ value: ad, label: ad })),
-    ];
+    return [{ value: '', label: 'None' }, ...STANDARD_ADDS.map((ad) => ({ value: ad, label: ad }))];
   }, []);
 
   const isToric =
-    selectedProductForConfig
-      ? selectedProductForConfig.titleEn.toLowerCase().includes('toric') ||
-        selectedProductForConfig.titleEn.toLowerCase().includes('astigmatism') ||
-        selectedProductForConfig.productType === 'SPECTACLES'
-      : false;
+    product.titleEn.toLowerCase().includes('toric') ||
+    product.titleEn.toLowerCase().includes('astigmatism') ||
+    product.productType === 'SPECTACLES';
 
   const isMultifocal =
-    selectedProductForConfig
-      ? selectedProductForConfig.titleEn.toLowerCase().includes('multifocal') ||
-        selectedProductForConfig.titleEn.toLowerCase().includes('presbyopia')
-      : false;
+    product.titleEn.toLowerCase().includes('multifocal') ||
+    product.titleEn.toLowerCase().includes('presbyopia');
 
-  const odUnitPrice = useMemo(() => {
-    if (!selectedProductForConfig) return 0;
-    return getEffectivePriceForPower(
-      selectedProductForConfig,
-      odIsPlano ? '0.00' : odPower,
-      odCyl,
-      odAdd
-    );
-  }, [selectedProductForConfig, odIsPlano, odPower, odCyl, odAdd]);
+  const odUnitPrice = getEffectivePriceForPower(
+    product,
+    odIsPlano ? '0.00' : odPower,
+    odCyl,
+    odAdd
+  );
+  const osUnitPrice = getEffectivePriceForPower(
+    product,
+    osIsPlano ? '0.00' : osPower,
+    osCyl,
+    osAdd
+  );
 
-  const osUnitPrice = useMemo(() => {
-    if (!selectedProductForConfig) return 0;
-    return getEffectivePriceForPower(
-      selectedProductForConfig,
-      osIsPlano ? '0.00' : osPower,
-      osCyl,
-      osAdd
-    );
-  }, [selectedProductForConfig, osIsPlano, osPower, osCyl, osAdd]);
-
-  const estTotal = useMemo(() => {
-    if (mode === 'BOTH') return odUnitPrice * odBoxes + osUnitPrice * osBoxes;
-    if (mode === 'OD_ONLY') return odUnitPrice * odBoxes;
-    return osUnitPrice * osBoxes;
-  }, [mode, odUnitPrice, odBoxes, osUnitPrice, osBoxes]);
-
-  if (!isLensConfigModalOpen || !selectedProductForConfig) return null;
+  const estTotal =
+    mode === 'BOTH'
+      ? odUnitPrice * odBoxes + osUnitPrice * osBoxes
+      : mode === 'OD_ONLY'
+      ? odUnitPrice * odBoxes
+      : osUnitPrice * osBoxes;
 
   const handleConfirm = () => {
     if (mode === 'BOTH' || mode === 'OD_ONLY') {
-      addLine(selectedProductForConfig, {
+      addLine(product, {
         eye: 'OD',
         power: odIsPlano ? '0.00' : odPower,
         cylinder: odCyl || null,
@@ -454,7 +377,7 @@ export function LensConfigModal() {
     }
 
     if (mode === 'BOTH' || mode === 'OS_ONLY') {
-      addLine(selectedProductForConfig, {
+      addLine(product, {
         eye: 'OS',
         power: osIsPlano ? '0.00' : osPower,
         cylinder: osCyl || null,
@@ -468,325 +391,319 @@ export function LensConfigModal() {
 
     showToast(
       'Optical Prescription Added',
-      `${selectedProductForConfig.titleEn} (${mode === 'BOTH' ? 'Right & Left Eyes' : mode}) added to cart`,
+      `${product.titleEn} (${mode === 'BOTH' ? 'Right & Left Eyes' : mode}) added to cart`,
       true
     );
     setLensConfigModalOpen(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]"
-      >
-        {/* Header */}
-        <div className="p-3.5 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-              <Eye size={16} />
-            </div>
-            <div>
-              <h2 className="font-bold text-sm leading-tight flex items-center gap-1.5">
-                {selectedProductForConfig.titleEn}
-                <span className="text-[10px] font-normal text-blue-300">
-                  <AnimatedQar value={selectedProductForConfig.salePriceQar ?? selectedProductForConfig.basePriceQar} /> / box
-                </span>
-              </h2>
-              <span className="text-[11px] text-slate-400">Configure Contact Lens Dual-Eye Prescription (OD / OS)</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setLensConfigModalOpen(false)}
-            className="text-slate-400 hover:text-white p-1 rounded transition"
-          >
-            <X size={18} />
-          </button>
+    <ResponsiveDialog
+      open={true}
+      onClose={() => setLensConfigModalOpen(false)}
+      title={product.titleEn}
+      subtitle="Configure Dual-Eye Optical Prescription (OD / OS)"
+      icon={
+        <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center">
+          <Eye size={16} />
         </div>
-
-        {/* Eye Selection Mode */}
-        <div className="bg-slate-100 p-2 border-b border-slate-200 flex items-center justify-center gap-2">
-          <button
-            onClick={() => setMode('BOTH')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              mode === 'BOTH' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Both Eyes (OD + OS)
-          </button>
-          <button
-            onClick={() => setMode('OD_ONLY')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              mode === 'OD_ONLY' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Right Eye Only (OD)
-          </button>
-          <button
-            onClick={() => setMode('OS_ONLY')}
-            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
-              mode === 'OS_ONLY' ? 'bg-blue-600 text-white shadow-xs' : 'bg-white text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Left Eye Only (OS)
-          </button>
-        </div>
-
-        {/* Dual Eye Configuration Body */}
-        <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Right Eye (OD) */}
-          {(mode === 'BOTH' || mode === 'OD_ONLY') && (
-            <div className="border border-blue-200 bg-blue-50/30 rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between border-b border-blue-100 pb-2">
-                <span className="font-bold text-xs text-blue-900 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px]">
-                    OD
-                  </span>
-                  Right Eye (Oculus Dexter)
-                </span>
-                {isPlanoInStock && (
-                  <label className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={odIsPlano}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        handleOdPowerChange(
-                          checked
-                            ? '0.00'
-                            : inStockPowers.find((p) => p !== '0.00' && !p.toLowerCase().includes('plano')) || '-0.50'
-                        );
-                      }}
-                      className="rounded text-blue-600 cursor-pointer"
-                    />
-                    Plano (0.00)
-                  </label>
-                )}
-              </div>
-
-              {/* Sphere Power */}
-              {!odIsPlano && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Sphere Power (SPH)
-                  </label>
-                  <SearchableSelect
-                    value={odPower}
-                    onChange={handleOdPowerChange}
-                    options={odPowerOptions}
-                    placeholder="Select SPH..."
-                    searchPlaceholder="Search SPH..."
-                  />
-                </div>
-              )}
-
-              {/* Astigmatism Toric CYL & AXIS */}
-              {isToric && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Cylinder (CYL)</label>
-                    <SearchableSelect
-                      value={odCyl}
-                      onChange={handleOdCylChange}
-                      disabled={odAvailableCylinders.length === 0}
-                      options={odCylOptions}
-                      placeholder="Select CYL..."
-                      searchPlaceholder="Search CYL..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Axis (°)</label>
-                    <SearchableSelect
-                      value={odAxis !== null && odAxis !== undefined ? String(odAxis) : ''}
-                      onChange={(val) => setOdAxis(val ? parseInt(val, 10) : null)}
-                      disabled={odAvailableAxes.length === 0}
-                      options={odAxisOptions}
-                      placeholder="Select Axis..."
-                      searchPlaceholder="Search Axis..."
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Multifocal Add */}
-              {isMultifocal && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Addition (ADD)</label>
-                  <SearchableSelect
-                    value={odAdd}
-                    onChange={setOdAdd}
-                    options={addOptions}
-                    placeholder="Select ADD..."
-                    searchPlaceholder="Search ADD..."
-                  />
-                </div>
-              )}
-
-              {/* Boxes Count */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Boxes Quantity (Right Eye)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setOdBoxes((b) => Math.max(1, b - 1))}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-10 text-center font-bold text-xs">{odBoxes}</span>
-                  <button
-                    onClick={() => setOdBoxes((b) => b + 1)}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Left Eye (OS) */}
-          {(mode === 'BOTH' || mode === 'OS_ONLY') && (
-            <div className="border border-purple-200 bg-purple-50/30 rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between border-b border-purple-100 pb-2">
-                <span className="font-bold text-xs text-purple-900 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">
-                    OS
-                  </span>
-                  Left Eye (Oculus Sinister)
-                </span>
-                {isPlanoInStock && (
-                  <label className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={osIsPlano}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        handleOsPowerChange(
-                          checked
-                            ? '0.00'
-                            : inStockPowers.find((p) => p !== '0.00' && !p.toLowerCase().includes('plano')) || '-0.50'
-                        );
-                      }}
-                      className="rounded text-purple-600 cursor-pointer"
-                    />
-                    Plano (0.00)
-                  </label>
-                )}
-              </div>
-
-              {/* Sphere Power */}
-              {!osIsPlano && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Sphere Power (SPH)
-                  </label>
-                  <SearchableSelect
-                    value={osPower}
-                    onChange={handleOsPowerChange}
-                    options={osPowerOptions}
-                    placeholder="Select SPH..."
-                    searchPlaceholder="Search SPH..."
-                  />
-                </div>
-              )}
-
-              {/* Astigmatism Toric CYL & AXIS */}
-              {isToric && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Cylinder (CYL)</label>
-                    <SearchableSelect
-                      value={osCyl}
-                      onChange={handleOsCylChange}
-                      disabled={osAvailableCylinders.length === 0}
-                      options={osCylOptions}
-                      placeholder="Select CYL..."
-                      searchPlaceholder="Search CYL..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">Axis (°)</label>
-                    <SearchableSelect
-                      value={osAxis !== null && osAxis !== undefined ? String(osAxis) : ''}
-                      onChange={(val) => setOsAxis(val ? parseInt(val, 10) : null)}
-                      disabled={osAvailableAxes.length === 0}
-                      options={osAxisOptions}
-                      placeholder="Select Axis..."
-                      searchPlaceholder="Search Axis..."
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Multifocal Add */}
-              {isMultifocal && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Addition (ADD)</label>
-                  <SearchableSelect
-                    value={osAdd}
-                    onChange={setOsAdd}
-                    options={addOptions}
-                    placeholder="Select ADD..."
-                    searchPlaceholder="Search ADD..."
-                  />
-                </div>
-              )}
-
-              {/* Boxes Count */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">Boxes Quantity (Left Eye)</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setOsBoxes((b) => Math.max(1, b - 1))}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-10 text-center font-bold text-xs">{osBoxes}</span>
-                  <button
-                    onClick={() => setOsBoxes((b) => b + 1)}
-                    className="w-8 h-8 rounded-lg bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer */}
-        <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <div className="text-xs text-slate-600">
-            Total Boxes:{' '}
-            <span className="font-bold text-slate-900">
-              <AnimatedCount
-                value={mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes}
-              />
-            </span>{' '}
-            • Est.{' '}
-            <span className="font-bold text-blue-600">
-              <AnimatedQar value={estTotal} />
+      }
+      headerExtra={
+        <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-700 hidden sm:inline">
+          <AnimatedQar value={product.salePriceQar ?? product.basePriceQar} /> / box
+        </span>
+      }
+      maxWidthClass="sm:max-w-2xl"
+      footer={
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="text-xs text-stone-600 font-mono flex items-center gap-2">
+            <span>
+              Total Boxes:{' '}
+              <strong className="text-stone-900">
+                <AnimatedCount
+                  value={mode === 'BOTH' ? odBoxes + osBoxes : mode === 'OD_ONLY' ? odBoxes : osBoxes}
+                />
+              </strong>
+            </span>
+            <span className="text-stone-300">·</span>
+            <span>
+              Est.{' '}
+              <strong className="text-teal-700">
+                <AnimatedQar value={estTotal} />
+              </strong>
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setLensConfigModalOpen(false)}
-              className="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"
+              className="min-h-[42px] px-4 rounded-xl border border-stone-300 bg-white text-stone-700 text-xs font-medium hover:bg-stone-100 transition cursor-pointer"
             >
               Cancel (Esc)
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
-              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-sm flex items-center gap-1.5 transition"
+              className="flex-1 sm:flex-initial min-h-[42px] px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
             >
-              <Check size={14} /> Add Prescription to Cart
+              <Check size={14} />
+              <span>Add Prescription</span>
             </button>
           </div>
         </div>
-      </motion.div>
-    </div>
+      }
+    >
+      {/* Eye Selection Mode */}
+      <div className="bg-stone-50 p-2 border-b border-stone-200 grid grid-cols-3 gap-1.5">
+        {(
+          [
+            { id: 'BOTH', label: 'Both Eyes (OD+OS)' },
+            { id: 'OD_ONLY', label: 'Right Eye (OD)' },
+            { id: 'OS_ONLY', label: 'Left Eye (OS)' },
+          ] as const
+        ).map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setMode(m.id)}
+            className={`min-h-[38px] px-2 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+              mode === m.id
+                ? 'bg-stone-900 text-white shadow-xs'
+                : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-100'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Dual Eye Configuration Body */}
+      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* Right Eye (OD) - Precision Teal */}
+        {(mode === 'BOTH' || mode === 'OD_ONLY') && (
+          <div className="border border-teal-200 bg-teal-50/35 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between border-b border-teal-200/70 pb-2">
+              <span className="font-semibold text-xs text-teal-950 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-teal-700 text-white font-mono flex items-center justify-center text-[10px]">
+                  OD
+                </span>
+                Right Eye
+              </span>
+              {isPlanoInStock && (
+                <label className="flex items-center gap-1.5 text-[11px] font-medium text-stone-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={odIsPlano}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      handleOdPowerChange(
+                        checked
+                          ? '0.00'
+                          : inStockPowers.find(
+                              (p) => p !== '0.00' && !p.toLowerCase().includes('plano')
+                            ) || '-0.50'
+                      );
+                    }}
+                    className="rounded border-stone-300 text-teal-700 cursor-pointer"
+                  />
+                  Plano (0.00)
+                </label>
+              )}
+            </div>
+
+            {!odIsPlano && (
+              <div>
+                <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                  Sphere Power (SPH)
+                </label>
+                <SearchableSelect
+                  value={odPower}
+                  onChange={handleOdPowerChange}
+                  options={powerOptions}
+                  placeholder="Select SPH..."
+                  searchPlaceholder="Search SPH..."
+                />
+              </div>
+            )}
+
+            {isToric && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                    Cylinder (CYL)
+                  </label>
+                  <SearchableSelect
+                    value={odCyl}
+                    onChange={handleOdCylChange}
+                    disabled={odAvailableCylinders.length === 0}
+                    options={odCylOptions}
+                    placeholder="Select CYL..."
+                    searchPlaceholder="Search CYL..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                    Axis (°)
+                  </label>
+                  <SearchableSelect
+                    value={odAxis !== null && odAxis !== undefined ? String(odAxis) : ''}
+                    onChange={(val) => setOdAxis(val ? parseInt(val, 10) : null)}
+                    disabled={odAvailableAxes.length === 0}
+                    options={odAxisOptions}
+                    placeholder="Select Axis..."
+                    searchPlaceholder="Search Axis..."
+                  />
+                </div>
+              </div>
+            )}
+
+            {isMultifocal && (
+              <div>
+                <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                  Addition (ADD)
+                </label>
+                <SearchableSelect
+                  value={odAdd}
+                  onChange={setOdAdd}
+                  options={addOptions}
+                  placeholder="Select ADD..."
+                  searchPlaceholder="Search ADD..."
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] font-medium text-stone-700">Boxes (OD)</span>
+              <TouchStepper
+                value={odBoxes}
+                size="touch"
+                onDecrement={() => setOdBoxes((b) => Math.max(1, b - 1))}
+                onIncrement={() => setOdBoxes((b) => b + 1)}
+                disableDecrement={odBoxes <= 1}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Left Eye (OS) - Warm Stone */}
+        {(mode === 'BOTH' || mode === 'OS_ONLY') && (
+          <div className="border border-stone-200 bg-stone-50/70 rounded-xl p-3.5 space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <span className="font-semibold text-xs text-stone-900 flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-stone-900 text-white font-mono flex items-center justify-center text-[10px]">
+                  OS
+                </span>
+                Left Eye
+              </span>
+              {isPlanoInStock && (
+                <label className="flex items-center gap-1.5 text-[11px] font-medium text-stone-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={osIsPlano}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      handleOsPowerChange(
+                        checked
+                          ? '0.00'
+                          : inStockPowers.find(
+                              (p) => p !== '0.00' && !p.toLowerCase().includes('plano')
+                            ) || '-0.50'
+                      );
+                    }}
+                    className="rounded border-stone-300 text-stone-900 cursor-pointer"
+                  />
+                  Plano (0.00)
+                </label>
+              )}
+            </div>
+
+            {!osIsPlano && (
+              <div>
+                <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                  Sphere Power (SPH)
+                </label>
+                <SearchableSelect
+                  value={osPower}
+                  onChange={handleOsPowerChange}
+                  options={powerOptions}
+                  placeholder="Select SPH..."
+                  searchPlaceholder="Search SPH..."
+                />
+              </div>
+            )}
+
+            {isToric && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                    Cylinder (CYL)
+                  </label>
+                  <SearchableSelect
+                    value={osCyl}
+                    onChange={handleOsCylChange}
+                    disabled={osAvailableCylinders.length === 0}
+                    options={osCylOptions}
+                    placeholder="Select CYL..."
+                    searchPlaceholder="Search CYL..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                    Axis (°)
+                  </label>
+                  <SearchableSelect
+                    value={osAxis !== null && osAxis !== undefined ? String(osAxis) : ''}
+                    onChange={(val) => setOsAxis(val ? parseInt(val, 10) : null)}
+                    disabled={osAvailableAxes.length === 0}
+                    options={osAxisOptions}
+                    placeholder="Select Axis..."
+                    searchPlaceholder="Search Axis..."
+                  />
+                </div>
+              </div>
+            )}
+
+            {isMultifocal && (
+              <div>
+                <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                  Addition (ADD)
+                </label>
+                <SearchableSelect
+                  value={osAdd}
+                  onChange={setOsAdd}
+                  options={addOptions}
+                  placeholder="Select ADD..."
+                  searchPlaceholder="Search ADD..."
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] font-medium text-stone-700">Boxes (OS)</span>
+              <TouchStepper
+                value={osBoxes}
+                size="touch"
+                onDecrement={() => setOsBoxes((b) => Math.max(1, b - 1))}
+                onIncrement={() => setOsBoxes((b) => b + 1)}
+                disableDecrement={osBoxes <= 1}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </ResponsiveDialog>
+  );
+}
+
+export function LensConfigModal() {
+  const { isLensConfigModalOpen, selectedProductForConfig } = usePosStore();
+
+  if (!isLensConfigModalOpen || !selectedProductForConfig) return null;
+
+  return (
+    <LensConfigModalBody
+      key={selectedProductForConfig.id}
+      product={selectedProductForConfig}
+    />
   );
 }

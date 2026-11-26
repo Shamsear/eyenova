@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { useSessionStore } from '@/stores/session-store';
 import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
-import { Store, Clock, Menu, Lock, Maximize2, Minimize2 } from 'lucide-react';
+import { Store, Clock, Menu, Lock, Maximize2, Minimize2, Search } from 'lucide-react';
 import { AnimatedQar } from '@/components/shared/animated-number';
 import { Morph } from 'cube-motion/react';
 
@@ -14,15 +13,30 @@ interface TopbarProps {
   subtitle?: string;
 }
 
+const emptySubscribe = () => () => {};
+
 export function Topbar({ title, subtitle }: TopbarProps) {
-  const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
-  const { user, store, shift, setShift, toggleMobileMenu, lockStation, isStaff, isFullscreen, toggleFullscreen } = useSessionStore();
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+  const {
+    user,
+    store,
+    shift,
+    setShift,
+    toggleMobileMenu,
+    setCommandPaletteOpen,
+    lockStation,
+    isStaff,
+    isFullscreen,
+    toggleFullscreen,
+  } = useSessionStore();
   const { setShiftModalOpen } = usePosStore();
   const [timeStr, setTimeStr] = useState<string>('');
 
   useEffect(() => {
-    setMounted(true);
     function updateClock() {
       const now = new Date();
       setTimeStr(
@@ -83,42 +97,57 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   const currentUser = mounted ? user : null;
   const currentStore = mounted ? store : null;
   const currentShift = mounted ? shift : null;
-  // Shift drawer is strictly for Staff (cashier) users only
   const showShiftBadge = mounted && isStaff();
 
   return (
-    <header className="h-10.5 border-b border-stone-200 bg-white flex items-center justify-between px-3 select-none shrink-0">
-      {/* Left: Mobile Menu Toggle + Breadcrumb Title */}
+    <header className="h-12 md:h-11 border-b border-stone-200 bg-white flex items-center justify-between px-2.5 sm:px-3.5 gap-2 select-none shrink-0">
+      {/* Left: Mobile Menu Toggle + Page Title */}
       <div className="flex items-center gap-2 min-w-0">
         <button
+          type="button"
           onClick={toggleMobileMenu}
           aria-label="Toggle Navigation Menu"
-          className="md:hidden w-7 h-7 rounded bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-700 transition shrink-0 cursor-pointer"
+          className="md:hidden w-10 h-10 rounded-lg bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-700 transition shrink-0 cursor-pointer"
         >
-          <Menu size={16} />
+          <Menu size={18} />
         </button>
 
-        <div className="flex items-center gap-1.5 min-w-0">
-          <h1 className="font-medium text-stone-900 text-xs sm:text-sm tracking-tight truncate whitespace-nowrap">
+        <div className="flex items-baseline gap-1.5 min-w-0">
+          <h1 className="font-semibold text-stone-900 text-xs sm:text-sm tracking-tight truncate whitespace-nowrap">
             {title}
           </h1>
           {subtitle && (
-            <span className="text-[10px] text-stone-400 hidden sm:inline truncate whitespace-nowrap">
+            <span className="text-[11px] text-stone-400 hidden lg:inline truncate whitespace-nowrap">
               / {subtitle}
             </span>
           )}
         </div>
       </div>
 
-      {/* Right Badges (All strictly single-line) */}
-      <div className="flex items-center gap-2 text-xs">
+      {/* Right Utility Strip */}
+      <div className="flex items-center gap-1.5 sm:gap-2 text-xs shrink-0">
+        {/* Quick Jump Command Palette Trigger (Ctrl+K) */}
+        <button
+          type="button"
+          onClick={() => setCommandPaletteOpen(true)}
+          title="Quick Jump (Ctrl+K)"
+          aria-label="Quick navigation command palette"
+          className="h-9 sm:h-7 px-2.5 sm:px-2 rounded-lg bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-600 hover:text-stone-900 flex items-center gap-1.5 transition cursor-pointer shrink-0"
+        >
+          <Search size={13} className="text-teal-700" />
+          <span className="hidden sm:inline text-[11px]">Jump</span>
+          <span className="hidden xl:inline text-[9px] font-mono px-1 py-0.2 rounded bg-white border border-stone-200 text-stone-400">
+            Ctrl+K
+          </span>
+        </button>
+
         {/* Clock */}
-        <div className="hidden lg:flex items-center gap-1 text-[11px] font-mono text-stone-400">
+        <div className="hidden xl:flex items-center gap-1 text-[11px] font-mono text-stone-400 px-1">
           <Clock size={11} />
           <span>{timeStr}</span>
         </div>
 
-        {/* Shift Drawer Balance Button (Shown for cashiers / on POS; hidden for Admins on backend pages matching desktop POS) */}
+        {/* Shift Drawer Balance Button */}
         {showShiftBadge && (
           <button
             type="button"
@@ -128,17 +157,21 @@ export function Topbar({ title, subtitle }: TopbarProps) {
                 ? `Shift Open (Expected Cash: ${formatQar(currentShift.expectedClosingCash)}). Click to reconcile or close.`
                 : 'Shift Closed. Click to declare opening float.'
             }
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-stone-50 hover:bg-stone-100 border border-stone-200 text-stone-800 text-[11px] font-mono tabular-nums whitespace-nowrap transition cursor-pointer"
+            className={`h-9 sm:h-7 flex items-center gap-1.5 px-2.5 sm:px-2 rounded-lg border text-[11px] font-mono tabular-nums whitespace-nowrap transition cursor-pointer ${
+              currentShift
+                ? 'bg-teal-50/80 hover:bg-teal-100/70 border-teal-200 text-teal-900'
+                : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
+            }`}
           >
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                currentShift ? 'bg-emerald-600 animate-pulse' : 'bg-stone-400'
+                currentShift ? 'bg-teal-600 animate-pulse' : 'bg-stone-400'
               }`}
             />
             <span className="flex items-center gap-1">
               {currentShift ? (
                 <>
-                  <span>Shift:</span>
+                  <span className="hidden sm:inline">Shift:</span>
                   <AnimatedQar value={currentShift.expectedClosingCash} />
                 </>
               ) : (
@@ -150,29 +183,33 @@ export function Topbar({ title, subtitle }: TopbarProps) {
 
         {/* Store Badge */}
         {currentStore && (
-          <div className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-stone-600 text-[11px] whitespace-nowrap">
-            <Store size={11} className="text-stone-400 shrink-0" />
-            <span className="truncate max-w-[120px] font-mono">{currentStore.code || currentStore.name}</span>
+          <div className="hidden lg:flex items-center gap-1 h-7 px-2 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 text-[11px] whitespace-nowrap">
+            <Store size={12} className="text-stone-400 shrink-0" />
+            <span className="truncate max-w-[120px] font-mono">
+              {currentStore.code || currentStore.name}
+            </span>
           </div>
         )}
 
         {/* User Account */}
         {currentUser && (
-          <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-stone-50 border border-stone-200 text-stone-700 text-[11px] whitespace-nowrap">
-            <span className="w-4 h-4 rounded bg-stone-200 text-stone-700 font-mono text-[9px] flex items-center justify-center font-medium">
+          <div className="hidden sm:flex items-center gap-1.5 h-7 px-2 rounded-lg bg-stone-50 border border-stone-200 text-stone-700 text-[11px] whitespace-nowrap">
+            <span className="w-4 h-4 rounded bg-teal-700 text-white font-mono text-[9px] flex items-center justify-center font-semibold">
               {currentUser.initials || 'OP'}
             </span>
-            <span className="truncate max-w-[90px] hidden sm:inline">{currentUser.fullName}</span>
+            <span className="truncate max-w-[90px]">{currentUser.fullName}</span>
           </div>
         )}
 
-        {/* Fullscreen Toggle Button with Cube-Motion Morph */}
+        {/* Fullscreen Toggle Button */}
         <button
+          type="button"
           onClick={() => toggleFullscreen()}
           title={isFullscreen ? 'Exit Fullscreen (Esc / F11)' : 'Enter Fullscreen (F11)'}
-          className={`p-1 rounded transition flex items-center gap-1 cursor-pointer shrink-0 ${
+          aria-label="Toggle fullscreen"
+          className={`hidden sm:flex h-7 px-2 rounded-lg transition items-center gap-1 cursor-pointer shrink-0 ${
             isFullscreen
-              ? 'bg-stone-900 text-stone-50 hover:bg-stone-800'
+              ? 'bg-teal-700 text-white hover:bg-teal-800'
               : 'hover:bg-stone-100 text-stone-500 hover:text-stone-900'
           }`}
         >
@@ -181,13 +218,13 @@ export function Topbar({ title, subtitle }: TopbarProps) {
             off={
               <span className="flex items-center gap-1">
                 <Maximize2 size={12} />
-                <span className="text-[11px] hidden md:inline">Fullscreen</span>
+                <span className="text-[11px] hidden lg:inline">Fullscreen</span>
               </span>
             }
             on={
               <span className="flex items-center gap-1">
                 <Minimize2 size={12} />
-                <span className="text-[11px] hidden md:inline">Exit Full</span>
+                <span className="text-[11px] hidden lg:inline">Exit Full</span>
               </span>
             }
           />
@@ -195,11 +232,13 @@ export function Topbar({ title, subtitle }: TopbarProps) {
 
         {/* Lock Station Button */}
         <button
+          type="button"
           onClick={lockStation}
           title="Lock Register"
-          className="p-1 rounded hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition flex items-center gap-1 cursor-pointer shrink-0"
+          aria-label="Lock Register"
+          className="h-9 sm:h-7 px-2.5 sm:px-2 rounded-lg hover:bg-stone-100 text-stone-500 hover:text-stone-900 transition flex items-center gap-1 cursor-pointer shrink-0"
         >
-          <Lock size={12} />
+          <Lock size={13} />
           <span className="text-[11px] hidden sm:inline">Lock</span>
         </button>
       </div>

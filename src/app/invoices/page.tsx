@@ -14,20 +14,20 @@ import {
   FileText,
   RotateCcw,
   Eye,
-  X,
   Printer,
   Loader2,
   AlertTriangle,
   Pencil,
+  Building2,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
+import { AnimatedQar } from '@/components/shared/animated-number';
 import { ThermalReceiptBill } from '@/components/shared/thermal-receipt-bill';
 import { A4InvoiceBill } from '@/components/shared/a4-invoice-bill';
 import { PrintReceiptArea } from '@/components/shared/print-receipt';
 import { EditInvoiceModal } from '@/components/shared/edit-invoice-modal';
 import { AggregatorSettlementModal } from '@/components/invoices/aggregator-settlement-modal';
-import { Building2 } from 'lucide-react';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { SlideOverDrawer } from '@/components/ui/slide-over-drawer';
 
 
 interface InvoiceRow {
@@ -73,6 +73,16 @@ const STATUS_FILTERS = [
   { id: 'CANCELLED', label: 'Cancelled' },
 ];
 
+interface CompanyProfileSummary {
+  nameEn?: string;
+  nameAr?: string;
+  addressEn?: string;
+  addressAr?: string;
+  phone?: string;
+  crNumber?: string;
+  website?: string;
+}
+
 export function statusToVariant(status: string): StatusVariant {
   switch (status.toUpperCase()) {
     case 'PAID':
@@ -102,16 +112,19 @@ export default function InvoicesPage() {
   const [refundModalInvoice, setRefundModalInvoice] = useState<InvoiceRow | null>(null);
   const [refundReason, setRefundReason] = useState('Customer return');
   const [refundError, setRefundError] = useState('');
-  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfileSummary | null>(null);
   const [editingInvoice, setEditingInvoice] = useState<InvoiceRow | null>(null);
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
 
   const { canRefund, user, store } = useSessionStore();
 
-  const handleEditSuccess = (updatedData: any) => {
+  const handleEditSuccess = (updatedData: Record<string, unknown>) => {
     fetchInvoices();
-    if (selectedInvoice && selectedInvoice.id === updatedData.id) {
-      setSelectedInvoice((prev) => (prev ? { ...prev, ...updatedData } : null));
+    const updatedId = typeof updatedData.id === 'string' ? updatedData.id : undefined;
+    if (selectedInvoice && (!updatedId || selectedInvoice.id === updatedId)) {
+      setSelectedInvoice((prev) =>
+        prev ? ({ ...prev, ...updatedData } as InvoiceRow) : null
+      );
     }
   };
 
@@ -133,7 +146,25 @@ export default function InvoicesPage() {
   };
 
   useEffect(() => {
-    fetchInvoices();
+    let active = true;
+    const params = new URLSearchParams();
+    params.set('limit', '500');
+    fetch(`/api/invoices?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.invoices) setInvoices(data.invoices);
+        if (data.companyProfile) setCompanyProfile(data.companyProfile);
+      })
+      .catch((err) => {
+        console.error('Error loading invoices:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleRefundSubmit = async (e: React.FormEvent) => {
@@ -159,8 +190,8 @@ export default function InvoicesPage() {
 
       setRefundModalInvoice(null);
       fetchInvoices();
-    } catch (err: any) {
-      setRefundError(err.message || 'Refund processing error');
+    } catch (err: unknown) {
+      setRefundError(err instanceof Error ? err.message : 'Refund processing error');
     } finally {
       setRefunding(false);
     }
@@ -229,6 +260,7 @@ export default function InvoicesPage() {
     {
       key: 'createdAt',
       header: 'Date & Time',
+      priority: 'standard',
       render: (row) => (
         <span className="font-mono text-[11px] text-stone-500 truncate block">
           {formatQatarDateTime(row.issuedAt || row.createdAt)}
@@ -250,6 +282,7 @@ export default function InvoicesPage() {
     {
       key: 'channel',
       header: 'Channel',
+      priority: 'standard',
       render: (row) => (
         <span className="text-[10px] font-mono text-stone-500 uppercase truncate block">
           {row.channel?.replace('_', ' ') || 'POS'}
@@ -259,6 +292,7 @@ export default function InvoicesPage() {
     {
       key: 'paymentMethod',
       header: 'Payment',
+      priority: 'standard',
       render: (row) => (
         <span className="text-[11px] font-mono text-stone-600 truncate block">
           {row.paymentMethod}
@@ -296,9 +330,9 @@ export default function InvoicesPage() {
               setSelectedInvoice(row);
             }}
             title="View invoice details"
-            className="p-1 text-stone-500 hover:text-stone-900 rounded hover:bg-stone-100 transition cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition cursor-pointer"
           >
-            <Eye size={13} />
+            <Eye size={14} />
           </button>
           <button
             type="button"
@@ -307,9 +341,9 @@ export default function InvoicesPage() {
               setEditingInvoice(row);
             }}
             title="Edit invoice"
-            className="p-1 text-stone-500 hover:text-blue-600 rounded hover:bg-stone-100 transition cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-teal-700 hover:bg-teal-50 rounded-md transition cursor-pointer"
           >
-            <Pencil size={13} />
+            <Pencil size={14} />
           </button>
           <button
             type="button"
@@ -318,9 +352,9 @@ export default function InvoicesPage() {
               downloadReceiptPdf(toReceiptPayload(row));
             }}
             title="Download 80mm receipt PDF"
-            className="p-1 text-stone-500 hover:text-stone-900 rounded hover:bg-stone-100 transition cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-stone-900 rounded-md hover:bg-stone-100 transition cursor-pointer"
           >
-            <Download size={13} />
+            <Download size={14} />
           </button>
           {row.status !== 'REFUNDED' && (
             <button
@@ -330,9 +364,9 @@ export default function InvoicesPage() {
                 setRefundModalInvoice(row);
               }}
               title="Refund invoice"
-              className="p-1 text-stone-400 hover:text-rose-600 rounded hover:bg-stone-100 transition cursor-pointer"
+              className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition cursor-pointer"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
             </button>
           )}
         </div>
@@ -368,6 +402,7 @@ export default function InvoicesPage() {
           data={invoices}
           columns={columns}
           keyExtractor={(inv) => inv.id}
+          loading={loading}
           searchQuery={search}
           searchFields={[
             (inv) => inv.invoiceNumber,
@@ -400,8 +435,8 @@ export default function InvoicesPage() {
                 </span>
               </div>
 
-              {/* Tier 3: Total and Quick Actions (Strictly Single-Line) */}
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100">
+              {/* Tier 3: Total and Quick Actions */}
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-100">
                 <AnimatedQar
                   value={inv.totalQar}
                   className="font-mono font-medium text-xs text-stone-900 tabular-nums"
@@ -413,9 +448,9 @@ export default function InvoicesPage() {
                       e.stopPropagation();
                       setEditingInvoice(inv);
                     }}
-                    className="px-2 py-0.5 rounded border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[10px] cursor-pointer flex items-center gap-1"
+                    className="min-h-[38px] px-3 rounded-lg border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[11px] cursor-pointer flex items-center gap-1"
                   >
-                    <Pencil size={10} /> Edit
+                    <Pencil size={11} /> Edit
                   </button>
                   <button
                     type="button"
@@ -423,7 +458,7 @@ export default function InvoicesPage() {
                       e.stopPropagation();
                       downloadReceiptPdf(toReceiptPayload(inv));
                     }}
-                    className="px-2 py-0.5 rounded border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[10px] cursor-pointer"
+                    className="min-h-[38px] px-3 rounded-lg border border-stone-200 text-stone-700 hover:bg-stone-50 font-mono text-[11px] cursor-pointer"
                   >
                     PDF
                   </button>
@@ -433,7 +468,7 @@ export default function InvoicesPage() {
                       e.stopPropagation();
                       setSelectedInvoice(inv);
                     }}
-                    className="px-2 py-0.5 rounded bg-stone-900 text-white font-mono text-[10px] cursor-pointer"
+                    className="min-h-[38px] px-3 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-mono text-[11px] font-medium cursor-pointer transition"
                   >
                     View
                   </button>
@@ -444,180 +479,172 @@ export default function InvoicesPage() {
         />
       </div>
 
-            {/* Invoice Receipt Bill Modal (Same UI copy as POS & EyeNovaBilling) */}
-      {/* Invoice Receipt Bill Modal */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className={`bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col h-[92vh] max-h-[92vh] my-auto shadow-2xl transition-all duration-200 ${
-              billPreviewMode === 'A4' ? 'w-full max-w-4xl' : 'w-full max-w-xl'
-            }`}
-          >
-            {/* Header */}
-            <div className="p-3 bg-stone-50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
-                <h3 className="font-semibold text-xs text-stone-900 truncate">
-                  Invoice {formatInvoiceNumber(selectedInvoice.invoiceNumber)}
-                </h3>
-                <StatusIndicator status={selectedInvoice.status} variant={statusToVariant(selectedInvoice.status)} />
-              </div>
-
-              {/* View Mode Toggle: A4 vs 80mm */}
-              <div className="flex items-center bg-stone-200/80 p-0.5 rounded-lg border border-stone-300/70 text-[11px] font-medium shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setBillPreviewMode('A4')}
-                  className={`px-2.5 sm:px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
-                    billPreviewMode === 'A4'
-                      ? 'bg-white text-stone-900 font-semibold shadow-xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  <FileText size={12} className={billPreviewMode === 'A4' ? 'text-stone-900' : 'text-stone-500'} />
-                  <span>A4 Tax Invoice / فاتورة A4</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBillPreviewMode('80MM')}
-                  className={`px-2.5 sm:px-3 py-1 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
-                    billPreviewMode === '80MM'
-                      ? 'bg-white text-stone-900 font-semibold shadow-xs'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  <Printer size={12} className={billPreviewMode === '80MM' ? 'text-stone-900' : 'text-stone-500'} />
-                  <span>80mm Slip / إيصال حراري</span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedInvoice(null)}
-                className="text-stone-400 hover:text-stone-700 p-1 rounded-md transition cursor-pointer hover:bg-stone-200/50"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Bill Preview Area */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 bg-stone-100">
-              <div className="flex justify-center items-start min-h-full">
-                {billPreviewMode === 'A4' ? (
-                  <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
-                ) : (
-                  <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
-                )}
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="p-3 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+      {/* Invoice Receipt Slide-Over Inspector Drawer */}
+      <SlideOverDrawer
+        open={!!selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        widthClass={billPreviewMode === 'A4' ? 'sm:w-[820px]' : 'sm:w-[480px]'}
+        title={selectedInvoice ? `Invoice ${formatInvoiceNumber(selectedInvoice.invoiceNumber)}` : ''}
+        subtitle={
+          selectedInvoice
+            ? `${selectedInvoice.customerName || 'Walk-in Client'} • ${formatQatarDateTime(
+                selectedInvoice.issuedAt || selectedInvoice.createdAt
+              )}`
+            : undefined
+        }
+        badge={
+          selectedInvoice ? (
+            <StatusIndicator
+              status={selectedInvoice.status}
+              variant={statusToVariant(selectedInvoice.status)}
+            />
+          ) : undefined
+        }
+        footer={
+          selectedInvoice && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingInvoice(selectedInvoice)}
-                  className="px-3 py-1.5 border border-blue-200 bg-blue-50/70 hover:bg-blue-100 rounded-md text-xs font-semibold text-blue-900 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  className="min-h-[42px] px-3 border border-teal-200 bg-teal-50/70 hover:bg-teal-100 rounded-lg text-xs font-semibold text-teal-900 flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Pencil size={12} className="text-blue-700" /> Edit Invoice / تعديل
+                  <Pencil size={12} className="text-teal-700" /> Edit / تعديل
                 </button>
                 <button
                   type="button"
                   onClick={() => downloadA4InvoicePdf(toReceiptPayload(selectedInvoice))}
-                  className="px-3 py-1.5 border border-stone-300 bg-white hover:bg-stone-100 rounded-md text-xs font-semibold text-stone-800 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  className="min-h-[42px] px-3 border border-stone-300 bg-white hover:bg-stone-100 rounded-lg text-xs font-semibold text-stone-800 flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Download size={13} className="text-emerald-700" /> Download A4 PDF
+                  <Download size={13} className="text-emerald-700" /> A4 PDF
                 </button>
                 <button
                   type="button"
                   onClick={() => downloadReceiptPdf(toReceiptPayload(selectedInvoice))}
-                  className="px-2.5 py-1.5 border border-stone-200 bg-white hover:bg-stone-100 rounded-md text-xs font-medium text-stone-700 flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+                  className="min-h-[42px] px-3 border border-stone-200 bg-white hover:bg-stone-100 rounded-lg text-xs font-medium text-stone-700 flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Download size={12} /> 80mm Slip PDF
+                  <Download size={12} /> 80mm PDF
                 </button>
               </div>
 
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="px-3.5 py-1.5 bg-stone-900 text-stone-50 rounded-md text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer shadow-xs ml-auto"
+                className="min-h-[42px] px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs ml-auto"
               >
                 <Printer size={13} /> Print / طباعة (Ctrl+P)
               </button>
             </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Refund Confirmation Modal (Replacing prompt()) */}
-      {refundModalInvoice && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-3 overflow-y-auto animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl border border-stone-200 w-full max-w-sm overflow-hidden p-4 space-y-3 shadow-xl my-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-stone-900">
-                Refund Invoice {formatInvoiceNumber(refundModalInvoice.invoiceNumber)}
-              </h3>
-              <button
-                onClick={() => setRefundModalInvoice(null)}
-                className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <p className="text-[11px] text-stone-500">
-              Amount to refund:{' '}
-              <span className="font-mono font-medium text-stone-900">
-                {formatQar(refundModalInvoice.totalQar)}
+          )
+        }
+      >
+        {selectedInvoice && (
+          <div className="-m-4 flex flex-col min-h-full">
+            {/* Format Segmented Toggle */}
+            <div className="sticky top-0 z-10 px-4 py-2.5 bg-white border-b border-stone-200 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-stone-500">
+                Bill Format
               </span>
-            </p>
-
-            <form onSubmit={handleRefundSubmit} className="space-y-2.5">
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Reason for Refund
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={refundReason}
-                  onChange={(e) => setRefundReason(e.target.value)}
-                  placeholder="e.g. Customer return, prescription change"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md focus:bg-white"
-                />
-              </div>
-
-              {refundError && (
-                <div className="p-1.5 bg-stone-50 border border-stone-300 rounded text-xs text-stone-900 flex items-center gap-1.5">
-                  <AlertTriangle size={12} className="text-rose-600 shrink-0" />
-                  <span className="truncate">{refundError}</span>
-                </div>
-              )}
-
-              <div className="pt-2 flex justify-end gap-1.5">
+              <div className="flex items-center bg-stone-100 p-0.5 rounded-lg border border-stone-200 text-[11px] font-medium">
                 <button
                   type="button"
-                  onClick={() => setRefundModalInvoice(null)}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 text-xs hover:bg-stone-50 cursor-pointer"
+                  onClick={() => setBillPreviewMode('A4')}
+                  className={`min-h-[34px] px-2.5 sm:px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                    billPreviewMode === 'A4'
+                      ? 'bg-white text-teal-800 font-semibold shadow-2xs border border-stone-200/80'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
                 >
-                  Cancel
+                  <FileText size={12} className={billPreviewMode === 'A4' ? 'text-teal-700' : 'text-stone-500'} />
+                  <span>A4 Tax Invoice</span>
                 </button>
                 <button
-                  type="submit"
-                  disabled={refunding}
-                  className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition cursor-pointer flex items-center gap-1"
+                  type="button"
+                  onClick={() => setBillPreviewMode('80MM')}
+                  className={`min-h-[34px] px-2.5 sm:px-3 rounded-md transition cursor-pointer flex items-center gap-1.5 ${
+                    billPreviewMode === '80MM'
+                      ? 'bg-white text-teal-800 font-semibold shadow-2xs border border-stone-200/80'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
                 >
-                  {refunding ? <Loader2 size={12} className="animate-spin" /> : null}
-                  <span>Confirm Refund</span>
+                  <Printer size={12} className={billPreviewMode === '80MM' ? 'text-teal-700' : 'text-stone-500'} />
+                  <span>80mm Slip</span>
                 </button>
               </div>
-            </form>
+            </div>
+
+            {/* Bill Preview Canvas */}
+            <div className="flex-1 p-3 sm:p-5 bg-stone-100 flex justify-center items-start">
+              {billPreviewMode === 'A4' ? (
+                <A4InvoiceBill data={toReceiptPayload(selectedInvoice)} className="w-full shadow-sm" />
+              ) : (
+                <ThermalReceiptBill data={toReceiptPayload(selectedInvoice)} />
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </SlideOverDrawer>
+
+      {/* Refund Confirmation Modal */}
+      <ResponsiveDialog
+        open={!!refundModalInvoice}
+        onClose={() => setRefundModalInvoice(null)}
+        maxWidthClass="sm:max-w-sm"
+        icon={<RotateCcw size={16} className="text-rose-600" />}
+        title={
+          refundModalInvoice
+            ? `Refund Invoice ${formatInvoiceNumber(refundModalInvoice.invoiceNumber)}`
+            : 'Refund Invoice'
+        }
+        subtitle={
+          refundModalInvoice
+            ? `Amount to refund: ${formatQar(refundModalInvoice.totalQar)}`
+            : undefined
+        }
+      >
+        {refundModalInvoice && (
+          <form onSubmit={handleRefundSubmit} className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Reason for Refund
+              </label>
+              <input
+                type="text"
+                required
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                placeholder="e.g. Customer return, prescription change"
+                className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:bg-white focus:border-teal-600 focus:outline-none"
+              />
+            </div>
+
+            {refundError && (
+              <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 flex items-center gap-1.5">
+                <AlertTriangle size={13} className="text-rose-600 shrink-0" />
+                <span className="truncate">{refundError}</span>
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRefundModalInvoice(null)}
+                className="min-h-[44px] px-4 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={refunding}
+                className="min-h-[44px] px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+              >
+                {refunding ? <Loader2 size={13} className="animate-spin" /> : null}
+                <span>Confirm Refund</span>
+              </button>
+            </div>
+          </form>
+        )}
+      </ResponsiveDialog>
       {/* Edit Invoice Modal */}
       {editingInvoice && (
         <EditInvoiceModal

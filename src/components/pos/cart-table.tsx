@@ -1,27 +1,26 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { usePosStore, getAvailableStockForLine, getOtherLinesStockUsage } from '@/stores/pos-store';
-import { SearchableSelect, SelectOption } from '@/components/shared/searchable-select';
+import React, { useState, useMemo } from 'react';
 import {
-  formatQar,
+  usePosStore,
+  getAvailableStockForLine,
+  getOtherLinesStockUsage,
+} from '@/stores/pos-store';
+import { SearchableSelect, SelectOption } from '@/components/shared/searchable-select';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { TouchStepper } from '@/components/ui/touch-stepper';
+import {
   formatOpticalSpecs,
   isOpticalProduct,
   STANDARD_POWERS,
   STANDARD_CYLINDERS,
   STANDARD_AXES,
-  STANDARD_ADDS,
 } from '@/lib/utils';
 import {
   Trash2,
   Plus,
-  Minus,
   User,
   PauseCircle,
-  PlayCircle,
-  Banknote,
-  CreditCard,
-  Split,
   Printer,
   Tag,
   Truck,
@@ -30,11 +29,16 @@ import {
   Store,
   PhoneCall,
   Globe,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimatedQar, AnimatedCount } from '@/components/shared/animated-number';
 
-export function CartTable() {
+interface CartTableProps {
+  onCloseSheet?: () => void;
+}
+
+export function CartTable({ onCloseSheet }: CartTableProps) {
   const {
     lines,
     selectedLineId,
@@ -43,7 +47,6 @@ export function CartTable() {
     discountAmount,
     discountType,
     deliveryFee,
-    taxRate,
     heldSales,
     incrementLineQuantity,
     updateLineSpecs,
@@ -61,19 +64,19 @@ export function CartTable() {
     setDeliveryFee,
     getSubtotal,
     getDiscountTotal,
-    getTaxTotal,
     getGrandTotal,
     getItemCount,
     showToast,
     orderChannel,
     setOrderChannel,
   } = usePosStore();
+
   const [showDiscountInput, setShowDiscountInput] = useState(false);
   const [discountVal, setDiscountVal] = useState('');
+  const [isRxDialogOpen, setIsRxDialogOpen] = useState(false);
 
   const subtotal = getSubtotal();
   const discountTotal = getDiscountTotal();
-  const taxTotal = getTaxTotal();
   const grandTotal = getGrandTotal();
   const itemCount = getItemCount();
 
@@ -177,7 +180,7 @@ export function CartTable() {
   // 3. Batches matching the currently selected power
   const matchingPowerBatches = useMemo(() => {
     if (inStockBatches.length === 0) return [];
-    const currP = selectedLine?.isPlano ? '0.00' : (selectedLine?.power || '0.00');
+    const currP = selectedLine?.isPlano ? '0.00' : selectedLine?.power || '0.00';
     return inStockBatches.filter((b) => {
       const bPower = b.power ? b.power.trim() : '0.00';
       const normBP = bPower === '0.00' || bPower.toLowerCase().includes('plano') ? '0.00' : bPower;
@@ -216,7 +219,7 @@ export function CartTable() {
       if (!currCyl) return !b.cylinder || b.cylinder.trim() === '';
       return b.cylinder?.trim() === currCyl;
     });
-  }, [matchingPowerBatches, selectedLine?.cylinder]);
+  }, [matchingPowerBatches, selectedLine]);
 
   // 6. Axes available for the selected Power + Cylinder combo
   const { availableAxes, axisCounts, hasNoAxisOption } = useMemo(() => {
@@ -239,13 +242,12 @@ export function CartTable() {
     return { availableAxes: STANDARD_AXES, axisCounts: {}, hasNoAxisOption: true };
   }, [matchingCylBatches]);
 
-  // SearchableSelect options for PWR, CYL, AXIS
   const pwrSelectOptions = useMemo<SelectOption[]>(() => {
     return inStockPowers.map((pwr) => {
       const isPlano = pwr === '0.00' || pwr.toLowerCase().includes('plano');
       const count = inStockPowerCounts[pwr];
       const normPwr = isPlano ? '0.00' : pwr;
-      const currentSelectedPower = selectedLine?.isPlano ? '0.00' : (selectedLine?.power || '0.00');
+      const currentSelectedPower = selectedLine?.isPlano ? '0.00' : selectedLine?.power || '0.00';
       const isCurrentlySelected = normPwr === currentSelectedPower;
 
       const otherCartUsage = lines
@@ -263,7 +265,8 @@ export function CartTable() {
       return {
         value: isPlano ? '0.00' : pwr,
         label: isPlano ? 'Plano (0.00)' : pwr,
-        badge: count !== undefined ? (isUnavailable ? '0 left' : `${availableForLine} pcs`) : undefined,
+        badge:
+          count !== undefined ? (isUnavailable ? '0 left' : `${availableForLine} pcs`) : undefined,
         badgeColor: (isUnavailable ? 'rose' : 'emerald') as SelectOption['badgeColor'],
         disabled: isUnavailable,
       };
@@ -304,28 +307,6 @@ export function CartTable() {
     return opts;
   }, [hasNoAxisOption, availableAxes, axisCounts]);
 
-  // Auto-correct to valid in-stock power if current selection is out-of-stock
-  useEffect(() => {
-    if (!selectedLine || !isSelectedLineOptical) return;
-    if (inStockPowers.length === 0) return;
-
-    const currentP = selectedLine.isPlano ? '0.00' : (selectedLine.power || '0.00');
-    const isCurrentValid = inStockPowers.some((p) => {
-      const normP = p === '0.00' || p.toLowerCase().includes('plano') ? '0.00' : p;
-      return normP === currentP;
-    });
-
-    if (!isCurrentValid) {
-      const firstValid = inStockPowers[0];
-      const isPlano = firstValid === '0.00' || firstValid.toLowerCase().includes('plano');
-      updateLineSpecs(selectedLine.lineId, {
-        power: isPlano ? '0.00' : firstValid,
-        isPlano,
-      });
-    }
-  }, [selectedLine?.lineId, inStockPowers, isSelectedLineOptical, selectedLine?.power, selectedLine?.isPlano, updateLineSpecs]);
-
-  // Power Change Handler with Cascading Auto-Update for Cylinder & Axis
   const handlePowerChange = (newPower: string) => {
     if (!selectedLine) return;
     const isPlano = newPower === '0.00' || newPower.toLowerCase().includes('plano');
@@ -370,7 +351,6 @@ export function CartTable() {
     });
   };
 
-  // Cylinder Change Handler with Cascading Auto-Update for Axis
   const handleCylinderChange = (newCylStr: string) => {
     if (!selectedLine) return;
     const cylVal = newCylStr ? newCylStr : null;
@@ -394,7 +374,6 @@ export function CartTable() {
     });
   };
 
-  // Axis Change Handler
   const handleAxisChange = (newAxisStr: string) => {
     if (!selectedLine) return;
     const newAxis = newAxisStr ? parseInt(newAxisStr, 10) : null;
@@ -403,68 +382,98 @@ export function CartTable() {
     });
   };
 
+  const hasMoreEyeStock = selectedLine
+    ? (selectedLine.batches || []).some((b) => {
+        const bP = b.power ? b.power.trim() : '0.00';
+        const bUsed = lines
+          .filter(
+            (l) =>
+              l.productId === selectedLine.productId &&
+              (l.isPlano ? '0.00' : l.power) === bP
+          )
+          .reduce((sum, l) => sum + l.quantity, 0);
+        return (b.quantity || 0) > bUsed;
+      })
+    : false;
+
+  const isAggregatorChannel = ['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel);
+
   return (
-    <div className="w-full h-full min-h-0 flex flex-col bg-white select-none border-l border-stone-200 overflow-hidden">
-      {/* 1. Customer Header & Order Channel Strip (Stone Light Style) */}
-      <div className="shrink-0 bg-stone-50 border-b border-stone-200 p-2 space-y-1.5">
+    <div className="w-full h-full min-h-0 flex flex-col bg-white select-none lg:border-l border-stone-200 overflow-hidden">
+      {/* 1. Customer Header, Sales Channel & Compact RX Summary */}
+      <div className="shrink-0 bg-stone-50 border-b border-stone-200 p-2.5 space-y-2">
         <div className="flex items-center justify-between gap-1.5 min-w-0">
-          {/* Customer Selection Button (F2) */}
           <button
+            type="button"
             onClick={() => setCustomerModalOpen(true)}
-            className="flex items-center gap-2 hover:bg-stone-100 p-1 rounded-md transition text-left flex-1 min-w-0 cursor-pointer"
+            className="flex items-center gap-2 hover:bg-stone-100 p-1 rounded-lg transition text-left flex-1 min-w-0 cursor-pointer"
           >
-            <div className="w-6 h-6 rounded-md bg-stone-200 text-stone-700 flex items-center justify-center shrink-0">
-              <User size={12} />
+            <div className="w-8 h-8 rounded-lg bg-stone-200 text-stone-700 flex items-center justify-center shrink-0">
+              <User size={14} />
             </div>
             <div className="truncate flex-1 min-w-0">
               <div className="flex items-center gap-1.5 truncate">
-                <span className="font-medium text-xs text-stone-900 truncate">{customerName}</span>
+                <span className="font-semibold text-xs text-stone-900 truncate">
+                  {customerName}
+                </span>
                 <span className="text-[9px] bg-stone-200 text-stone-600 px-1 rounded font-mono shrink-0">
                   F2
                 </span>
               </div>
-              <span className="text-[10px] text-stone-500 font-mono block truncate">
+              <span className="text-[11px] text-stone-500 font-mono block truncate">
                 {customerPhone ? customerPhone : 'Attach client'}
               </span>
             </div>
           </button>
 
-          {/* Reset Customer Button */}
           {customerName !== 'Walk-in Customer' && (
             <button
+              type="button"
               onClick={() => setCustomer({ name: 'Walk-in Customer', phone: '' })}
               title="Reset client"
-              className="p-1 text-stone-400 hover:text-stone-700 rounded transition cursor-pointer shrink-0"
+              aria-label="Reset client"
+              className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition cursor-pointer shrink-0"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
           )}
 
-          {/* Held Sales Counter */}
           {heldSales.length > 0 && (
             <button
+              type="button"
               onClick={() => setHeldSalesModalOpen(true)}
-              className="bg-stone-100 border border-stone-300 text-stone-800 text-[10px] font-mono font-medium px-2 py-0.5 rounded flex items-center gap-1 hover:bg-stone-200 transition cursor-pointer shrink-0"
+              className="h-8 bg-amber-50 border border-amber-300 text-amber-900 text-[10px] font-mono font-semibold px-2 rounded-lg flex items-center gap-1 hover:bg-amber-100 transition cursor-pointer shrink-0"
             >
-              <PauseCircle size={11} className="text-amber-600" />
+              <PauseCircle size={12} className="text-amber-600" />
               <span className="tabular-nums">{heldSales.length} Held</span>
             </button>
           )}
 
-          {/* Clear Cart Button */}
           {lines.length > 0 && (
             <button
+              type="button"
               onClick={() => clearCart()}
               title="Clear Cart"
-              className="p-1 text-stone-400 hover:text-rose-600 rounded transition cursor-pointer shrink-0"
+              aria-label="Clear Cart"
+              className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition cursor-pointer shrink-0"
             >
-              <RotateCcw size={13} />
+              <RotateCcw size={14} />
+            </button>
+          )}
+
+          {onCloseSheet && (
+            <button
+              type="button"
+              onClick={onCloseSheet}
+              className="h-8 px-3 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 text-xs font-medium text-stone-800 cursor-pointer shrink-0"
+            >
+              Catalog
             </button>
           )}
         </div>
 
-        {/* Sales Channel Segment (Single Line without scrollbar) */}
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scrollbar-none text-[10px] pb-0.5">
+        {/* Sales Channel Segmented Strip */}
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar text-[11px] pb-0.5">
           {(
             [
               { id: 'IN_STORE_POS', label: 'In-Store', icon: Store },
@@ -480,201 +489,89 @@ export function CartTable() {
             return (
               <button
                 key={ch.id}
+                type="button"
                 onClick={() => setOrderChannel(ch.id)}
-                className={`px-2 py-0.5 rounded font-medium whitespace-nowrap transition cursor-pointer flex items-center gap-1 shrink-0 ${
+                className={`min-h-[30px] px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition cursor-pointer flex items-center gap-1 shrink-0 ${
                   isSelected
                     ? 'bg-stone-900 text-white'
                     : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                 }`}
               >
-                <Icon size={10} />
+                <Icon size={11} />
                 <span>{ch.label}</span>
               </button>
             );
           })}
         </div>
-        {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) && (
-          <div className="flex items-center justify-between px-2 py-1 bg-amber-50 border border-amber-200/80 rounded text-[10px] text-amber-900 mt-1">
-            <span className="flex items-center gap-1 font-medium">
+
+        {isAggregatorChannel && (
+          <div className="flex items-center justify-between px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
+            <span className="flex items-center gap-1 font-medium truncate">
               <Truck size={11} className="text-amber-700 shrink-0" />
-              <span>{orderChannel} Platform Receivable (Pending Settlement)</span>
+              <span className="truncate">{orderChannel} Receivable (Pending Settlement)</span>
             </span>
-            <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleToggleDeliveryFee}
+              className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition cursor-pointer shrink-0 ${
+                deliveryFee > 0
+                  ? 'bg-amber-200 text-amber-950 border border-amber-300 font-bold'
+                  : 'bg-white border border-amber-300 text-amber-800 hover:bg-amber-100'
+              }`}
+            >
+              {deliveryFee > 0 ? 'Deliv: 10 (✕)' : '+10 Deliv'}
+            </button>
+          </div>
+        )}
+
+        {/* Compact 1-Line Precision Teal RX Bar (replaces 110px inline block so cart list stays tall!) */}
+        {selectedLine && isSelectedLineOptical && (
+          <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-teal-50 border border-teal-200 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="px-1.5 py-0.5 rounded bg-teal-700 text-white text-[9px] font-mono uppercase tracking-wider shrink-0">
+                RX
+              </span>
+              <span className="font-mono text-[11px] font-semibold text-teal-950 truncate">
+                {formatOpticalSpecs(selectedLine)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={handleToggleDeliveryFee}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium transition cursor-pointer ${
-                  deliveryFee > 0
-                    ? 'bg-amber-200 text-amber-950 border border-amber-300 font-bold'
-                    : 'bg-white border border-amber-300 text-amber-800 hover:bg-amber-100'
-                }`}
-                title="Click to toggle standard 10 QAR delivery fee"
+                disabled={!hasMoreEyeStock}
+                onClick={() => addAnotherEyeLine(selectedLine.lineId)}
+                title={
+                  !hasMoreEyeStock
+                    ? 'No additional stock available for this product'
+                    : 'Add another box for other eye (OD/OS)'
+                }
+                className="h-7 px-2 rounded-lg bg-white hover:bg-teal-100/60 disabled:opacity-40 disabled:cursor-not-allowed text-teal-900 border border-teal-200 text-[10px] font-medium flex items-center gap-1 transition cursor-pointer"
               >
-                {deliveryFee > 0 ? 'Deliv: 10 QAR (✕ Clear)' : '+10 Delivery'}
+                <Plus size={11} />
+                <span>2nd Eye</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRxDialogOpen(true)}
+                className="h-7 px-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-semibold flex items-center gap-1 transition cursor-pointer"
+              >
+                <SlidersHorizontal size={11} />
+                <span>Edit RX</span>
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* 2. Prescription Config Strip (Swiss Stone Style) */}
-      {selectedLine && isSelectedLineOptical && (
-        <div className="shrink-0 bg-stone-100/80 border-b border-stone-200 p-2 space-y-1.5">
-          {/* Header row: RX CONFIG pill, line title, Other Eye button, Done button */}
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="px-1.5 py-0.5 rounded bg-stone-900 text-stone-50 text-[9px] font-mono uppercase tracking-wider shrink-0">
-                RX Config
-              </span>
-              <span className="text-xs font-semibold text-stone-900 truncate" title={selectedLine.titleEn}>
-                {selectedLine.titleEn}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 shrink-0">
-              {(() => {
-                const hasMoreInStock = (selectedLine.batches || []).some((b) => {
-                  const bP = b.power ? b.power.trim() : '0.00';
-                  const bUsed = lines
-                    .filter((l) => l.productId === selectedLine.productId && (l.isPlano ? '0.00' : l.power) === bP)
-                    .reduce((sum, l) => sum + l.quantity, 0);
-                  return (b.quantity || 0) > bUsed;
-                });
-
-                return (
-                  <button
-                    type="button"
-                    disabled={!hasMoreInStock}
-                    onClick={() => addAnotherEyeLine(selectedLine.lineId)}
-                    title={
-                      !hasMoreInStock
-                        ? 'No additional stock available for this product'
-                        : 'Add another box for other eye (OD/OS)'
-                    }
-                    className="px-2 py-0.5 rounded bg-white hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 border border-stone-200 text-[10px] font-medium flex items-center gap-1 transition cursor-pointer"
-                  >
-                    <Plus size={10} />
-                    <span>Other Eye</span>
-                  </button>
-                );
-              })()}
-              <button
-                type="button"
-                onClick={() => setSelectedLineId(null)}
-                title="Accept optical specs & close editor"
-                className="px-2.5 py-0.5 rounded bg-stone-900 hover:bg-stone-800 text-stone-50 text-[10px] font-medium transition cursor-pointer"
-              >
-                <span>Done</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Parameters & Specs Row: EYE, PWR, CYL, AXIS, Plano */}
-          <div className="flex items-center gap-1.5 flex-wrap text-xs">
-            {/* Eye Selector (OD / OS) */}
-            <div className="flex items-center bg-white border border-stone-200 rounded overflow-hidden shrink-0">
-              <span className="bg-stone-100 px-1.5 py-0.5 text-[9px] font-mono text-stone-500 border-r border-stone-200">
-                Eye
-              </span>
-              <button
-                type="button"
-                onClick={() => setLineEye(selectedLine.lineId, 'OD')}
-                className={`px-1.5 py-0.5 text-[10px] font-mono transition cursor-pointer ${
-                  selectedLine.eye === 'OD'
-                    ? 'bg-stone-900 text-stone-50 font-bold'
-                    : 'text-stone-600 hover:bg-stone-50'
-                }`}
-              >
-                OD (R)
-              </button>
-              <span className="w-px h-3 bg-stone-200" />
-              <button
-                type="button"
-                onClick={() => setLineEye(selectedLine.lineId, 'OS')}
-                className={`px-1.5 py-0.5 text-[10px] font-mono transition cursor-pointer ${
-                  selectedLine.eye === 'OS'
-                    ? 'bg-stone-900 text-stone-50 font-bold'
-                    : 'text-stone-600 hover:bg-stone-50'
-                }`}
-              >
-                OS (L)
-              </button>
-            </div>
-
-            {/* Power Selector (PWR) */}
-            <div className="flex items-center bg-white border border-stone-200 rounded overflow-hidden shrink-0">
-              <span className="bg-stone-100 px-1.5 py-0.5 text-[9px] font-mono text-stone-500 border-r border-stone-200">
-                PWR
-              </span>
-              <SearchableSelect
-                options={pwrSelectOptions}
-                value={selectedLine.isPlano ? '0.00' : (selectedLine.power || '0.00')}
-                onChange={(val) => handlePowerChange(val)}
-                compact
-                searchPlaceholder="PWR..."
-                menuWidth={180}
-              />
-            </div>
-
-            {/* Cylinder Selector (CYL) */}
-            <div className="flex items-center bg-white border border-stone-200 rounded overflow-hidden shrink-0">
-              <span className="bg-stone-100 px-1.5 py-0.5 text-[9px] font-mono text-stone-500 border-r border-stone-200">
-                CYL
-              </span>
-              <SearchableSelect
-                options={cylSelectOptions}
-                value={selectedLine.cylinder || ''}
-                onChange={(val) => handleCylinderChange(val)}
-                disabled={availableCylinders.length === 0}
-                compact
-                placeholder="None"
-                searchPlaceholder="CYL..."
-                menuWidth={160}
-              />
-            </div>
-
-            {/* Axis Selector (AXIS) */}
-            <div className="flex items-center bg-white border border-stone-200 rounded overflow-hidden shrink-0">
-              <span className="bg-stone-100 px-1.5 py-0.5 text-[9px] font-mono text-stone-500 border-r border-stone-200">
-                AXIS
-              </span>
-              <SearchableSelect
-                options={axisSelectOptions}
-                value={selectedLine.axis !== null && selectedLine.axis !== undefined ? String(selectedLine.axis) : ''}
-                onChange={(val) => handleAxisChange(val)}
-                disabled={availableAxes.length === 0}
-                compact
-                placeholder="None"
-                searchPlaceholder="Axis..."
-                menuWidth={160}
-              />
-            </div>
-
-            {/* Plano Toggle Checkbox */}
-            {isPlanoInStock && (
-              <label className="flex items-center gap-1 bg-white border border-stone-200 rounded px-1.5 py-0.5 cursor-pointer select-none text-[10px] font-mono text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={selectedLine.isPlano}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    handlePowerChange(checked ? '0.00' : (inStockPowers.find((p) => p !== '0.00' && !p.toLowerCase().includes('plano')) || '-0.50'));
-                  }}
-                  className="rounded border-stone-300 text-stone-900 focus:ring-0 cursor-pointer"
-                />
-                <span>Plano</span>
-              </label>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Cart Line Items List (Scrollable middle container) */}
+      {/* 2. Cart Line Items List (Touch-safe TouchStepper + separated delete) */}
       <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-stone-100">
         {lines.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 text-stone-400">
-            <span className="text-xs font-medium text-stone-600 block">Cart is empty</span>
-            <span className="text-[11px] text-stone-400 font-mono mt-0.5">Scan barcode or tap products to begin</span>
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-stone-400">
+            <span className="text-xs font-semibold text-stone-700 block">Cart is empty</span>
+            <span className="text-[11px] text-stone-400 font-mono mt-1">
+              Scan barcode or tap products to begin
+            </span>
           </div>
         ) : (
           <AnimatePresence initial={false}>
@@ -682,7 +579,12 @@ export function CartTable() {
               const isSelected = line.lineId === selectedLineId;
               const lineTotal = line.unitPrice * line.quantity;
               const isOpticalItem = isOpticalProduct(line);
-              const opticalSummary = line.lensSummary || (isOpticalItem ? formatOpticalSpecs(line) : '');
+              const opticalSummary =
+                line.lensSummary || (isOpticalItem ? formatOpticalSpecs(line) : '');
+              const totalStock = getAvailableStockForLine(line);
+              const usedByOthers = getOtherLinesStockUsage(line, lines);
+              const maxAllowed = Math.max(0, totalStock - usedByOthers);
+              const isMaxReached = line.quantity >= maxAllowed;
 
               return (
                 <motion.div
@@ -691,84 +593,76 @@ export function CartTable() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -16, transition: { duration: 0.15 } }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.18 }}
                   onClick={() => setSelectedLineId(line.lineId)}
-                  className={`p-2 flex items-center justify-between gap-2 transition cursor-pointer min-w-0 ${
-                    isSelected ? 'bg-stone-100/90 border-l-2 border-stone-900 ring-1 ring-inset ring-stone-200' : 'hover:bg-stone-50/60'
+                  className={`p-2.5 flex items-center justify-between gap-2 transition cursor-pointer min-w-0 ${
+                    isSelected
+                      ? 'bg-teal-50/35 border-l-2 border-teal-700'
+                      : 'hover:bg-stone-50/80'
                   }`}
                 >
-                  {/* Title & Metadata (Strictly Single-Line) */}
+                  {/* Title & Optical Spec Badge */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-medium text-xs text-stone-900 truncate block">
-                        {line.titleEn}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                    <span className="font-medium text-xs text-stone-900 truncate block">
+                      {line.titleEn}
+                    </span>
+                    <div className="flex items-center gap-1.5 mt-1 min-w-0 flex-wrap">
                       {opticalSummary ? (
-                        <span className="text-[9px] font-mono px-1 py-0.2 bg-stone-200 text-stone-800 rounded shrink-0 truncate max-w-[120px]">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedLineId(line.lineId);
+                            setIsRxDialogOpen(true);
+                          }}
+                          className="text-[10px] font-mono px-1.5 py-0.5 bg-teal-50 border border-teal-200 text-teal-800 rounded-md hover:bg-teal-100 shrink-0 truncate max-w-[140px] cursor-pointer"
+                          title="Tap to edit optical RX"
+                        >
                           {opticalSummary}
-                        </span>
+                        </button>
                       ) : null}
-                      <span className="text-[10px] text-stone-400 font-mono truncate flex items-center gap-1">
+                      <span className="text-[11px] text-stone-400 font-mono truncate flex items-center gap-1">
                         <span>{line.brandName || 'Optical'} ·</span>
-                        <AnimatedQar value={line.unitPrice} className="text-stone-400" />
+                        <AnimatedQar value={line.unitPrice} className="text-stone-500" />
                       </span>
                     </div>
                   </div>
 
-                  {/* Stepper + Total (Single-Line) */}
+                  {/* Stepper + Total + Separated Delete */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center border border-stone-200 rounded bg-white">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          incrementLineQuantity(line.lineId, -1);
-                        }}
-                        className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 transition cursor-pointer"
-                      >
-                        <Minus size={10} />
-                      </button>
-                      <AnimatedCount
-                        value={line.quantity}
-                        className="w-6 justify-center font-mono text-xs font-medium text-stone-900 tabular-nums"
-                      />
-                      {(() => {
-                        const totalStock = getAvailableStockForLine(line);
-                        const usedByOthers = getOtherLinesStockUsage(line, lines);
-                        const maxAllowed = Math.max(0, totalStock - usedByOthers);
-                        const isMaxReached = line.quantity >= maxAllowed;
-
-                        return (
-                          <button
-                            disabled={isMaxReached}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              incrementLineQuantity(line.lineId, 1);
-                            }}
-                            title={isMaxReached ? `Max stock reached (${maxAllowed} pcs)` : 'Add 1 piece'}
-                            className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                          >
-                            <Plus size={10} />
-                          </button>
-                        );
-                      })()}
-                    </div>
+                    <TouchStepper
+                      value={line.quantity}
+                      size="touch"
+                      onDecrement={(e) => {
+                        e.stopPropagation();
+                        incrementLineQuantity(line.lineId, -1);
+                      }}
+                      onIncrement={(e) => {
+                        e.stopPropagation();
+                        incrementLineQuantity(line.lineId, 1);
+                      }}
+                      disableIncrement={isMaxReached}
+                      incrementTitle={
+                        isMaxReached ? `Max stock reached (${maxAllowed} pcs)` : 'Add 1 piece'
+                      }
+                    />
 
                     <AnimatedQar
                       value={lineTotal}
-                      className="font-mono font-medium text-xs text-stone-900 tabular-nums min-w-[55px] justify-end text-right"
+                      className="font-mono font-semibold text-xs text-stone-900 tabular-nums min-w-[60px] justify-end text-right"
                     />
 
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         removeLine(line.lineId);
                       }}
                       title="Remove item"
-                      className="p-1 text-stone-400 hover:text-stone-700 rounded cursor-pointer"
+                      aria-label={`Remove ${line.titleEn}`}
+                      className="w-8 h-8 flex items-center justify-center text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </motion.div>
@@ -778,12 +672,11 @@ export function CartTable() {
         )}
       </div>
 
-      {/* 4. Compact Fixed Bottom Calculations & Action Buttons (PINNED TO BOTTOM) */}
-      <div className="shrink-0 border-t border-stone-200 bg-stone-50 p-2 space-y-1.5">
-        {/* Subtotal, Discount & Delivery Controls in Compact Format */}
-        <div className="space-y-0.5 text-xs">
+      {/* 3. Fixed Bottom Totals & 2-Row Ergonomic Tender Bar */}
+      <div className="shrink-0 border-t border-stone-200 bg-stone-50 p-2.5 space-y-2">
+        <div className="space-y-1 text-xs">
           <div className="flex justify-between items-center text-stone-600 text-[11px]">
-            <span className="font-mono text-stone-500">Subtotal</span>
+            <span className="font-mono text-stone-500">Subtotal ({itemCount} pcs)</span>
             <AnimatedQar value={subtotal} className="font-mono text-stone-900 tabular-nums" />
           </div>
 
@@ -796,45 +689,54 @@ export function CartTable() {
                     placeholder="10 or 15%"
                     value={discountVal}
                     onChange={(e) => setDiscountVal(e.target.value)}
-                    className="w-16 h-5 px-1 text-[10px] bg-white border border-stone-300 rounded font-mono"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') applyDiscountInput();
+                      if (e.key === 'Escape') setShowDiscountInput(false);
+                    }}
+                    className="w-20 h-7 px-2 text-[16px] sm:text-[11px] bg-white border border-stone-300 rounded-md font-mono"
                     autoFocus
                   />
                   <button
                     type="button"
                     onClick={applyDiscountInput}
-                    className="px-1.5 py-0.5 text-[9px] bg-stone-900 text-white rounded font-mono cursor-pointer"
+                    className="h-7 px-2 text-[10px] bg-teal-700 text-white rounded-md font-mono cursor-pointer"
                   >
                     OK
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowDiscountInput(false)}
-                    className="px-1 text-[9px] text-stone-400 hover:text-stone-700 cursor-pointer"
+                    className="h-7 px-1.5 text-[10px] text-stone-500 hover:text-stone-800 cursor-pointer"
                   >
-                    X
+                    ✕
                   </button>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={() => setShowDiscountInput(true)}
-                  className="flex items-center gap-1 text-stone-600 hover:text-stone-900 cursor-pointer font-mono text-[10px]"
+                  className="flex items-center gap-1 text-stone-600 hover:text-stone-900 cursor-pointer font-mono text-[11px]"
                 >
-                  <Tag size={10} />
-                  <span>Discount {discountAmount > 0 ? `(${discountAmount}${discountType === 'PERCENT' ? '%' : ''})` : ''}</span>
+                  <Tag size={11} />
+                  <span>
+                    Discount{' '}
+                    {discountAmount > 0
+                      ? `(${discountAmount}${discountType === 'PERCENT' ? '%' : ''})`
+                      : ''}
+                  </span>
                 </button>
               )}
 
               <button
                 type="button"
                 onClick={handleToggleDeliveryFee}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition cursor-pointer flex items-center gap-0.5 ${
+                className={`px-2 py-0.5 rounded-md text-[10px] font-mono transition cursor-pointer flex items-center gap-1 ${
                   deliveryFee > 0
                     ? 'bg-stone-900 text-white'
-                    : 'bg-stone-200 text-stone-600 hover:bg-stone-300'
+                    : 'bg-stone-200/80 text-stone-600 hover:bg-stone-300'
                 }`}
               >
-                <Truck size={9} />
+                <Truck size={10} />
                 <span>Delivery {deliveryFee > 0 ? '+10' : 'None'}</span>
               </button>
             </div>
@@ -850,88 +752,232 @@ export function CartTable() {
           </div>
         </div>
 
-        {/* Total Due Banner */}
-        <div className="pt-1 border-t border-stone-200 flex items-baseline justify-between">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500">Total Due</span>
-          <AnimatedQar value={grandTotal} className="text-base font-semibold text-stone-900 font-mono tabular-nums" />
+        <div className="pt-1.5 border-t border-stone-200 flex items-baseline justify-between">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500">
+            Total Due
+          </span>
+          <AnimatedQar
+            value={grandTotal}
+            className="text-lg font-bold text-stone-900 font-mono tabular-nums"
+          />
         </div>
 
-        {/* Unified 5-Action Tender Strip: Hold, Recall, Cash, Card, Split */}
-        <div className="grid grid-cols-5 gap-1 pt-0.5 text-[10px] font-medium font-mono">
+        {/* Row 1: Hold / Recall / Pre-selected Tender Methods */}
+        <div className="grid grid-cols-5 gap-1.5 text-[11px] font-medium font-mono">
           <button
+            type="button"
             onClick={handleHoldSale}
             disabled={lines.length === 0}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 disabled:opacity-40 transition cursor-pointer min-h-[28px] truncate px-0.5"
+            className="min-h-[36px] flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 disabled:opacity-40 transition cursor-pointer px-1"
             title="Park current cart (F3)"
           >
-            Hold (F3)
+            Hold
           </button>
           <button
+            type="button"
             onClick={() => setHeldSalesModalOpen(true)}
-            className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 transition cursor-pointer min-h-[28px] truncate px-0.5 gap-0.5"
+            className="min-h-[36px] flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-100 transition cursor-pointer px-1 gap-0.5"
             title="Recall parked cart (F4)"
           >
             <span>Recall</span>
-            {heldSales.length > 0 ? (
+            {heldSales.length > 0 && (
               <AnimatedCount value={heldSales.length} prefix="(" suffix=")" />
-            ) : (
-              <span>(F4)</span>
             )}
           </button>
-          {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) ? (
-            <div className="col-span-3 flex items-center justify-center py-1 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-medium min-h-[28px] truncate px-1 gap-1">
-              <Truck size={11} className="text-amber-700 shrink-0" />
-              <span className="truncate">Pending Platform Receivable (No Cash In Till)</span>
+          {isAggregatorChannel ? (
+            <div className="col-span-3 min-h-[36px] flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-[10px] font-medium px-1.5 gap-1">
+              <Truck size={12} className="text-amber-700 shrink-0" />
+              <span className="truncate">Pending Platform Payout</span>
             </div>
           ) : (
             <>
               <button
-                onClick={() => setPaymentModalOpen(true)}
+                type="button"
+                onClick={() => setPaymentModalOpen(true, 'CASH')}
                 disabled={lines.length === 0}
-                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                className="min-h-[36px] flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-900 hover:border-teal-700 hover:bg-teal-50/40 transition disabled:opacity-40 cursor-pointer px-1"
                 title="Tender Cash (F6)"
               >
-                Cash (F6)
+                Cash
               </button>
               <button
-                onClick={() => setPaymentModalOpen(true)}
+                type="button"
+                onClick={() => setPaymentModalOpen(true, 'CARD')}
                 disabled={lines.length === 0}
-                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                className="min-h-[36px] flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-900 hover:border-teal-700 hover:bg-teal-50/40 transition disabled:opacity-40 cursor-pointer px-1"
                 title="Tender Card (F7)"
               >
-                Card (F7)
+                Card
               </button>
               <button
-                onClick={() => setPaymentModalOpen(true)}
+                type="button"
+                onClick={() => setPaymentModalOpen(true, 'SPLIT')}
                 disabled={lines.length === 0}
-                className="flex items-center justify-center py-1 rounded border border-stone-200 bg-white text-stone-800 hover:bg-stone-100 transition disabled:opacity-40 cursor-pointer min-h-[28px] truncate px-0.5"
+                className="min-h-[36px] flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-900 hover:border-teal-700 hover:bg-teal-50/40 transition disabled:opacity-40 cursor-pointer px-1"
                 title="Split Payment (F8)"
               >
-                Split (F8)
+                Split
               </button>
             </>
           )}
         </div>
 
-        {/* Primary Pay & Print Button (Full-width, Strictly Single-Line) */}
+        {/* Row 2: Primary Precision Teal Checkout CTA */}
         <button
+          type="button"
           onClick={() => setPaymentModalOpen(true)}
           disabled={lines.length === 0}
-          className="w-full min-h-[38px] py-1.5 rounded bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
+          className="w-full min-h-[44px] py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs tracking-wide transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-xs"
         >
-          {['TALABAT', 'SNOONU', 'RAFEEQ'].includes(orderChannel) ? (
+          {isAggregatorChannel ? (
             <>
-              <Truck size={13} className="text-amber-400" />
+              <Truck size={14} className="text-teal-100" />
               <span>BILL TO {orderChannel} (PENDING) (F12)</span>
             </>
           ) : (
             <>
-              <Printer size={13} />
-              <span>PAY & PRINT (F12)</span>
+              <Printer size={14} />
+              <span>PAY &amp; PRINT (F12)</span>
             </>
           )}
         </button>
       </div>
+
+      {/* Dedicated Optical Prescription (RX) Editor Sheet/Modal */}
+      <ResponsiveDialog
+        open={Boolean(isRxDialogOpen && selectedLine && isSelectedLineOptical)}
+        onClose={() => setIsRxDialogOpen(false)}
+        title="Optical Prescription (RX)"
+        subtitle={selectedLine?.titleEn}
+        maxWidthClass="sm:max-w-md"
+        bodyClassName="p-4 space-y-4"
+        footer={
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={!hasMoreEyeStock}
+              onClick={() => {
+                if (selectedLine) addAnotherEyeLine(selectedLine.lineId);
+              }}
+              className="min-h-[40px] px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 disabled:opacity-40 text-xs font-medium text-stone-800 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus size={13} />
+              <span>Add Other Eye</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsRxDialogOpen(false)}
+              className="min-h-[40px] px-5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        }
+      >
+        {selectedLine && isSelectedLineOptical && (
+          <>
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500 block">
+                Eye Side
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLineEye(selectedLine.lineId, 'OD')}
+                  className={`h-11 rounded-xl border text-xs font-mono font-semibold transition cursor-pointer ${
+                    selectedLine.eye === 'OD'
+                      ? 'bg-teal-700 border-teal-700 text-white'
+                      : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                  }`}
+                >
+                  OD (Right Eye)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLineEye(selectedLine.lineId, 'OS')}
+                  className={`h-11 rounded-xl border text-xs font-mono font-semibold transition cursor-pointer ${
+                    selectedLine.eye === 'OS'
+                      ? 'bg-stone-900 border-stone-900 text-white'
+                      : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                  }`}
+                >
+                  OS (Left Eye)
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 mb-1">
+                  Sphere (PWR)
+                </label>
+                <SearchableSelect
+                  options={pwrSelectOptions}
+                  value={selectedLine.isPlano ? '0.00' : selectedLine.power || '0.00'}
+                  onChange={handlePowerChange}
+                  searchPlaceholder="PWR..."
+                  menuWidth={200}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 mb-1">
+                  Cylinder (CYL)
+                </label>
+                <SearchableSelect
+                  options={cylSelectOptions}
+                  value={selectedLine.cylinder || ''}
+                  onChange={handleCylinderChange}
+                  disabled={availableCylinders.length === 0}
+                  placeholder="None"
+                  searchPlaceholder="CYL..."
+                  menuWidth={180}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-stone-500 mb-1">
+                  Axis (°)
+                </label>
+                <SearchableSelect
+                  options={axisSelectOptions}
+                  value={
+                    selectedLine.axis !== null && selectedLine.axis !== undefined
+                      ? String(selectedLine.axis)
+                      : ''
+                  }
+                  onChange={handleAxisChange}
+                  disabled={availableAxes.length === 0}
+                  placeholder="None"
+                  searchPlaceholder="Axis..."
+                  menuWidth={180}
+                />
+              </div>
+            </div>
+
+            {isPlanoInStock && (
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-stone-200 bg-stone-50 cursor-pointer select-none text-xs font-medium text-stone-800">
+                <input
+                  type="checkbox"
+                  checked={selectedLine.isPlano}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    handlePowerChange(
+                      checked
+                        ? '0.00'
+                        : inStockPowers.find(
+                            (p) => p !== '0.00' && !p.toLowerCase().includes('plano')
+                          ) || '-0.50'
+                    );
+                  }}
+                  className="w-4 h-4 rounded border-stone-300 text-teal-700 focus:ring-0 cursor-pointer"
+                />
+                <span>Plano (0.00 Cosmetic / Non-Prescription)</span>
+              </label>
+            )}
+          </>
+        )}
+      </ResponsiveDialog>
     </div>
   );
 }

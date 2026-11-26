@@ -45,13 +45,13 @@ export function PageHeader({
   children,
 }: PageHeaderProps) {
   return (
-    <div className="bg-white border-b border-stone-200 px-3 py-2.5 space-y-2 select-none shrink-0">
+    <div className="bg-white border border-stone-200 rounded-xl px-3.5 py-2.5 space-y-2.5 select-none shrink-0">
       {/* Top Bar: Title + Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
-          <h2 className="text-sm font-medium text-stone-900 truncate">{title}</h2>
+          <h2 className="text-sm font-semibold text-stone-900 truncate">{title}</h2>
           {subtitle && (
-            <span className="text-[11px] text-stone-400 font-mono hidden sm:inline truncate">
+            <span className="text-[11px] text-stone-500 font-mono hidden sm:inline truncate">
               {subtitle}
             </span>
           )}
@@ -63,9 +63,9 @@ export function PageHeader({
             <button
               type="button"
               onClick={secondaryAction.onClick}
-              className="px-2.5 py-1 border border-stone-200 hover:bg-stone-50 rounded-md text-xs font-medium text-stone-700 transition flex items-center gap-1 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] sm:min-h-[32px] px-3 py-1.5 border border-stone-200 hover:bg-stone-50 rounded-lg text-xs font-medium text-stone-700 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              {secondaryAction.icon && <secondaryAction.icon size={12} className="text-stone-500" />}
+              {secondaryAction.icon && <secondaryAction.icon size={13} className="text-stone-500" />}
               <span>{secondaryAction.label}</span>
             </button>
           )}
@@ -74,9 +74,9 @@ export function PageHeader({
             <button
               type="button"
               onClick={primaryAction.onClick}
-              className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 text-stone-50 rounded-md text-xs font-medium transition flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-xs"
+              className="min-h-[38px] sm:min-h-[32px] px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
             >
-              {primaryAction.icon && <primaryAction.icon size={12} />}
+              {primaryAction.icon && <primaryAction.icon size={13} />}
               <span>{primaryAction.label}</span>
             </button>
           )}
@@ -88,24 +88,25 @@ export function PageHeader({
       {/* Bottom Bar: Search + Filter Tabs */}
       {(onSearchChange || filters) && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 min-w-0">
-          {/* Search Box */}
+          {/* Search Box (16px on mobile prevents iOS Safari auto-zoom) */}
           {onSearchChange && (
             <div className="relative w-full sm:w-64 shrink-0">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery || ''}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full h-8 pl-7 pr-7 text-xs bg-stone-50 border border-stone-200 rounded-md text-stone-900 placeholder:text-stone-400 focus:outline-hidden focus:border-stone-400 transition"
+                className="w-full h-10 sm:h-8 pl-8 pr-8 text-[16px] sm:text-xs bg-stone-50 border border-stone-200 rounded-lg text-stone-900 placeholder:text-stone-400 focus:bg-white focus:outline-hidden focus:border-teal-700 transition"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => onSearchChange('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer"
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-stone-400 hover:text-stone-700 cursor-pointer"
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
               )}
             </div>
@@ -121,10 +122,10 @@ export function PageHeader({
                     key={f.id}
                     type="button"
                     onClick={() => onFilterChange(f.id)}
-                    className={`px-2 py-1 rounded text-[11px] transition whitespace-nowrap cursor-pointer shrink-0 ${
+                    className={`min-h-[34px] sm:min-h-[28px] px-2.5 py-1 rounded-lg text-[11px] transition whitespace-nowrap cursor-pointer shrink-0 ${
                       isActive
                         ? 'bg-stone-900 text-white font-medium'
-                        : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200/60'
+                        : 'bg-stone-50 hover:bg-stone-100 text-stone-600 border border-stone-200/80'
                     }`}
                   >
                     <span>{f.label}</span>

@@ -48,7 +48,33 @@ export default function SettingsPage() {
   };
 
   React.useEffect(() => {
-    loadSettings();
+    let active = true;
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active || !data.profile) return;
+        setCompany({
+          nameEn: data.profile.nameEn || '',
+          nameAr: data.profile.nameAr || '',
+          email: data.profile.email || '',
+          phone: data.profile.phone || '',
+          addressEn: data.profile.addressEn || '',
+          addressAr: data.profile.addressAr || '',
+          crNumber: data.profile.crNumber || '',
+          vatNumber: data.profile.vatNumber || '',
+          currency: data.profile.currency || 'QAR',
+          taxRate: data.profile.taxRate?.toString() || '0.00',
+        });
+      })
+      .catch((err) => {
+        console.error('Error loading settings:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleSave = async (e?: React.FormEvent) => {
@@ -97,7 +123,7 @@ export default function SettingsPage() {
               type="button"
               onClick={loadSettings}
               disabled={loading || saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               <RotateCcw size={12} className={loading ? 'animate-spin' : ''} />
               <span>Reset</span>
@@ -107,7 +133,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => handleSave()}
               disabled={saving}
-              className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap min-w-[120px]"
+              className="min-h-[38px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs whitespace-nowrap min-w-[130px]"
             >
               {saving ? (
                 <>
@@ -124,7 +150,7 @@ export default function SettingsPage() {
                     </span>
                   }
                   on={
-                    <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
+                    <span className="flex items-center gap-1.5 text-emerald-200 font-medium">
                       <Check size={13} />
                       <span>Saved!</span>
                     </span>
@@ -138,15 +164,15 @@ export default function SettingsPage() {
         {/* Settings Form Container */}
         <form onSubmit={handleSave} className="space-y-4">
           {/* Company Legal Profile */}
-          <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
-                <Building size={14} className="text-stone-500 shrink-0" />
+                <Building size={14} className="text-teal-700 shrink-0" />
                 <h3 className="font-semibold text-xs text-stone-900 truncate">
-                  Company Legal Registration & Receipt Header
+                  Company Legal Registration &amp; Receipt Header
                 </h3>
               </div>
-              <span className="text-[10px] font-mono font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+              <span className="text-[10px] font-mono font-medium text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
                 MOCI Registered
               </span>
             </div>
@@ -159,7 +185,7 @@ export default function SettingsPage() {
                   value={company.nameEn}
                   onChange={(e) => setCompany({ ...company, nameEn: e.target.value })}
                   placeholder="EyeNova Optical"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -170,7 +196,7 @@ export default function SettingsPage() {
                   value={company.nameAr}
                   onChange={(e) => setCompany({ ...company, nameAr: e.target.value })}
                   placeholder="آي نوفا للتجارة البصرية"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs text-stone-900 text-right focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs text-stone-900 text-right focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -181,7 +207,7 @@ export default function SettingsPage() {
                   value={company.crNumber}
                   onChange={(e) => setCompany({ ...company, crNumber: e.target.value })}
                   placeholder="e.g. 182940"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs font-mono text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs font-mono text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -192,7 +218,7 @@ export default function SettingsPage() {
                   value={company.vatNumber}
                   onChange={(e) => setCompany({ ...company, vatNumber: e.target.value })}
                   placeholder="Optional / Exempt"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs font-mono text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs font-mono text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -203,7 +229,7 @@ export default function SettingsPage() {
                   value={company.addressEn}
                   onChange={(e) => setCompany({ ...company, addressEn: e.target.value })}
                   placeholder="02 Mall, 79 Street 773, Al Kheesa, Doha, Qatar"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -214,7 +240,7 @@ export default function SettingsPage() {
                   value={company.phone}
                   onChange={(e) => setCompany({ ...company, phone: e.target.value })}
                   placeholder="+974 6633 7371"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs font-mono text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs font-mono text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
 
@@ -225,19 +251,19 @@ export default function SettingsPage() {
                   value={company.email}
                   onChange={(e) => setCompany({ ...company, email: e.target.value })}
                   placeholder="info@eyenova.qa"
-                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded text-xs text-stone-900 focus:outline-none focus:border-stone-900 focus:ring-1 focus:ring-stone-900 transition"
+                  className="w-full min-h-[40px] px-3 py-2 bg-white border border-stone-300 rounded-lg text-[16px] sm:text-xs text-stone-900 focus:outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition"
                 />
               </div>
             </div>
           </div>
 
           {/* POS Hardware & Protocols Configuration */}
-          <div className="bg-white rounded-lg border border-stone-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
             <div className="px-4 py-3 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
-                <Printer size={14} className="text-stone-500 shrink-0" />
+                <Printer size={14} className="text-teal-700 shrink-0" />
                 <h3 className="font-semibold text-xs text-stone-900 truncate">
-                  POS Hardware & Thermal Roll Configuration
+                  POS Hardware &amp; Thermal Roll Configuration
                 </h3>
               </div>
               <span className="text-[10px] font-mono font-medium text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
@@ -246,7 +272,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="p-4 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between p-2.5 rounded bg-stone-50 border border-stone-200 gap-2">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-stone-50 border border-stone-200 gap-2">
                 <div className="min-w-0 flex-1">
                   <span className="font-medium text-stone-900 block truncate">Thermal Receipt Roll Format</span>
                   <span className="text-[11px] text-stone-500 block truncate font-mono">
@@ -258,11 +284,11 @@ export default function SettingsPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded bg-stone-50 border border-stone-200 gap-2">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-stone-50 border border-stone-200 gap-2">
                 <div className="min-w-0 flex-1">
                   <span className="font-medium text-stone-900 block truncate">A4 Tax Invoice PDF Generation</span>
                   <span className="text-[11px] text-stone-500 block truncate font-mono">
-                    Vector jsPDF generation with bilingual QR code & CR/VAT details
+                    Vector jsPDF generation with bilingual QR code &amp; CR/VAT details
                   </span>
                 </div>
                 <span className="bg-stone-100 text-stone-800 border border-stone-200 text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
@@ -270,21 +296,21 @@ export default function SettingsPage() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded bg-stone-50 border border-stone-200 gap-2">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-stone-50 border border-stone-200 gap-2">
                 <div className="min-w-0 flex-1">
                   <span className="font-medium text-stone-900 block truncate">ECR Bank Card Terminal Mode</span>
                   <span className="text-[11px] text-stone-500 block truncate font-mono">
                     One-click terminal confirmation with auth code (QNB, CBQ, Doha Bank, PAX)
                   </span>
                 </div>
-                <span className="bg-stone-900 text-stone-50 text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                <span className="bg-teal-700 text-white text-[10px] font-mono px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
                   1-Click Active
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded bg-stone-50 border border-stone-200 gap-2">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-stone-50 border border-stone-200 gap-2">
                 <div className="min-w-0 flex-1">
-                  <span className="font-medium text-stone-900 block truncate">Optical Diopter & Cart Architecture</span>
+                  <span className="font-medium text-stone-900 block truncate">Optical Diopter &amp; Cart Architecture</span>
                   <span className="text-[11px] text-stone-500 block truncate font-mono">
                     Direct 1-line item cart without OD/OS eye separation
                   </span>

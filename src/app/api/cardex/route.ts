@@ -461,6 +461,11 @@ export async function GET(req: NextRequest) {
     });
 
     adjustments.forEach((adj) => {
+      // Ignore online sales and deliveries logged as adjustments to prevent double-deduction (already in orderItems)
+      if (adj.reason === 'SHOPIFY_SALE' || adj.reason === 'ONLINE_DELIVERY') {
+        return;
+      }
+
       const linkedBatch = adj.batchId ? batchMap.get(adj.batchId) : null;
       const pwr = linkedBatch?.power || null;
 

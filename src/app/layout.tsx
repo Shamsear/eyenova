@@ -18,11 +18,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const viewport: Viewport = {
-  themeColor: '#1c1917',
+  themeColor: '#0f766e',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
 };
 

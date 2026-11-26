@@ -12,7 +12,6 @@ import {
   Eye,
   Pencil,
   Plus,
-  X,
   Layers,
   Calendar,
   Tag,
@@ -30,6 +29,7 @@ import {
 } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
 import { BulkAvailabilityModal } from '@/components/shared/BulkAvailabilityModal';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 const CATEGORY_LABEL_MAP: Record<string, string> = {
   COLORED_CONTACT_LENSES: 'Colored Lenses',
@@ -303,8 +303,8 @@ export default function ProductsPage() {
       } else {
         showToast('Save Failed', data.error || 'Failed to save pricing tiers', false);
       }
-    } catch (err: any) {
-      showToast('Save Error', err.message || 'Network error saving tiers', false);
+    } catch (err: unknown) {
+      showToast('Save Error', err instanceof Error ? err.message : 'Network error saving tiers', false);
     } finally {
       setIsSavingTiers(false);
     }
@@ -419,8 +419,8 @@ export default function ProductsPage() {
       } else {
         setEditError(data.error || 'Failed to update product');
       }
-    } catch (err: any) {
-      setEditError(err.message || 'Connection error while saving');
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : 'Connection error while saving');
     } finally {
       setIsSaving(false);
     }
@@ -485,8 +485,8 @@ export default function ProductsPage() {
       } else {
         setCreateError(data.error || 'Failed to create product');
       }
-    } catch (err: any) {
-      setCreateError(err.message || 'Network error while creating');
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : 'Network error while creating');
     } finally {
       setIsCreating(false);
     }
@@ -550,8 +550,8 @@ export default function ProductsPage() {
       } else {
         setBatchError(data.error || 'Failed to create batch');
       }
-    } catch (err: any) {
-      setBatchError(err.message || 'Error adding batch');
+    } catch (err: unknown) {
+      setBatchError(err instanceof Error ? err.message : 'Error adding batch');
     } finally {
       setIsAddingBatch(false);
     }
@@ -712,7 +712,23 @@ export default function ProductsPage() {
   }
 
   useEffect(() => {
-    fetchProducts();
+    let active = true;
+    const params = new URLSearchParams();
+    params.set('limit', '500');
+    fetch(`/api/products?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.products) setProducts(data.products);
+      })
+      .catch((err) => {
+        console.error('Error loading products:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const columns: Column<ProductItem>[] = [
@@ -731,6 +747,7 @@ export default function ProductsPage() {
     {
       key: 'sku',
       header: 'SKU / Barcode',
+      priority: 'standard',
       render: (p) => (
         <div className="truncate font-mono">
           <span className="text-xs text-stone-800 truncate block leading-tight">{p.sku}</span>
@@ -741,6 +758,7 @@ export default function ProductsPage() {
     {
       key: 'productType',
       header: 'Category',
+      priority: 'standard',
       render: (p) => (
         <span className="text-[11px] text-stone-600 truncate block">
           {p.productType.replace(/_/g, ' ')}
@@ -755,7 +773,7 @@ export default function ProductsPage() {
         const tiers = Array.isArray(p.powerPriceTiers)
           ? p.powerPriceTiers
           : typeof p.powerPriceTiers === 'string'
-          ? (JSON.parse(p.powerPriceTiers || '[]') as any[])
+          ? (JSON.parse(p.powerPriceTiers || '[]') as PowerPriceTier[])
           : [];
         const count = tiers.length;
         return (
@@ -764,7 +782,7 @@ export default function ProductsPage() {
               {formatQar(p.salePriceQar ?? p.basePriceQar)}
             </span>
             {count > 0 && (
-              <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.2 rounded border border-purple-200 mt-0.5">
+              <span className="text-[9px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200 mt-0.5">
                 {count} {count === 1 ? 'Tier' : 'Tiers'}
               </span>
             )}
@@ -822,7 +840,7 @@ export default function ProductsPage() {
         <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={() => openProductModal(p, 'EDIT')}
-            className="px-2 py-1 bg-stone-900 hover:bg-stone-800 text-stone-50 rounded text-xs font-mono transition cursor-pointer flex items-center gap-1 shadow-2xs"
+            className="min-h-[32px] px-2.5 py-1 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-mono transition cursor-pointer flex items-center gap-1 shadow-2xs"
             title="Edit product, pricing, stock and specs"
           >
             <Pencil size={11} />
@@ -830,7 +848,7 @@ export default function ProductsPage() {
           </button>
           <button
             onClick={() => openProductModal(p, 'VIEW')}
-            className="px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded text-xs font-mono transition cursor-pointer flex items-center gap-1"
+            className="min-h-[32px] px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-md text-xs font-mono transition cursor-pointer flex items-center gap-1"
             title="View specifications & batches"
           >
             <Eye size={11} />
@@ -871,22 +889,22 @@ export default function ProductsPage() {
 
         {/* Brand Filter Bar */}
         {brandFilters.length > 2 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs py-1.5 px-2 bg-stone-50 border border-stone-200 rounded-md shrink-0">
-            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider shrink-0 font-medium">Brand Filter:</span>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs py-1.5 px-2.5 bg-stone-50 border border-stone-200 rounded-lg shrink-0">
+            <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider shrink-0 font-medium">Brand:</span>
             {brandFilters.map((b) => {
               const isSelected = selectedBrand === b.id;
               return (
                 <button
                   key={b.id}
                   onClick={() => setSelectedBrand(b.id)}
-                  className={`px-2.5 py-0.5 rounded text-[11px] whitespace-nowrap transition cursor-pointer shrink-0 flex items-center gap-1 ${
+                  className={`min-h-[30px] px-2.5 py-0.5 rounded-md text-[11px] whitespace-nowrap transition cursor-pointer shrink-0 flex items-center gap-1 ${
                     isSelected
-                      ? 'bg-amber-600 text-white font-medium shadow-none'
+                      ? 'bg-teal-700 text-white font-semibold shadow-2xs'
                       : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200/80'
                   }`}
                 >
                   <span>{b.label}</span>
-                  <span className={`text-[10px] tabular-nums ${isSelected ? 'text-amber-100' : 'text-stone-400'}`}>
+                  <span className={`text-[10px] tabular-nums ${isSelected ? 'text-teal-100' : 'text-stone-400'}`}>
                     ({b.count})
                   </span>
                 </button>
@@ -900,6 +918,7 @@ export default function ProductsPage() {
           data={products}
           columns={columns}
           keyExtractor={(p) => p.id}
+          loading={loading}
           searchQuery={search}
           searchFields={[
             (p) => p.titleEn,
@@ -943,13 +962,13 @@ export default function ProductsPage() {
                     <StatusIndicator status={status.label} variant={status.variant} />
                     <button
                       onClick={() => openProductModal(p, 'EDIT')}
-                      className="px-2 py-0.5 bg-stone-900 text-stone-50 rounded text-[10px] font-mono cursor-pointer"
+                      className="min-h-[36px] px-3 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-[11px] font-mono font-medium cursor-pointer transition"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => openProductModal(p, 'VIEW')}
-                      className="px-2 py-0.5 bg-stone-100 text-stone-700 rounded text-[10px] font-mono cursor-pointer"
+                      className="min-h-[36px] px-3 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-[11px] font-mono cursor-pointer transition"
                     >
                       View
                     </button>
@@ -963,46 +982,29 @@ export default function ProductsPage() {
         {/* =========================================================================
             PRODUCT INSPECTOR & EDITOR MODAL (View, Edit & Manage Diopter Batches)
             ========================================================================= */}
-        {editingProduct && (
-          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-2xl max-h-[92dvh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-              {/* Modal Top Title Bar */}
-              <div className="p-3 sm:p-3.5 bg-stone-50 border-b border-stone-200 flex items-start justify-between gap-2.5 shrink-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <h3 className="font-bold text-sm sm:text-base text-stone-900 leading-snug break-words">
-                      {editingProduct.titleEn}
-                    </h3>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 shrink-0">
-                      {editingProduct.sku}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-500 font-mono mt-0.5">
-                    <span>Brand: {editingProduct.brandName || 'EyeNova'}</span>
-                    <span>·</span>
-                    <span>Stock: {editingProduct.stockQuantity} units</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="p-1.5 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-200 transition cursor-pointer shrink-0 -mr-1 -mt-0.5"
-                  title="Close modal"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Modal Dedicated Tab Switcher (Horizontal scrollable, never overlaps or truncates) */}
+        <ResponsiveDialog
+          open={!!editingProduct}
+          onClose={() => setEditingProduct(null)}
+          maxWidthClass="sm:max-w-2xl"
+          title={editingProduct?.titleEn || 'Product'}
+          subtitle={
+            editingProduct
+              ? `${editingProduct.sku} · Brand: ${editingProduct.brandName || 'EyeNova'} · Stock: ${editingProduct.stockQuantity} units`
+              : undefined
+          }
+          bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+        >
+          {editingProduct && (
+            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Modal Dedicated Tab Switcher */}
               <div className="px-3 sm:px-4 py-2 bg-stone-100/80 border-b border-stone-200 overflow-x-auto no-scrollbar shrink-0">
                 <div className="flex items-center gap-1.5 min-w-max text-xs font-medium">
                   <button
                     type="button"
                     onClick={() => setModalTab('EDIT')}
-                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`min-h-[34px] px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       modalTab === 'EDIT'
-                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        ? 'bg-white text-teal-800 shadow-2xs font-semibold border border-stone-200/80'
                         : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
                     }`}
                   >
@@ -1012,9 +1014,9 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => setModalTab('BATCHES')}
-                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`min-h-[34px] px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       modalTab === 'BATCHES'
-                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        ? 'bg-white text-teal-800 shadow-2xs font-semibold border border-stone-200/80'
                         : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
                     }`}
                   >
@@ -1024,9 +1026,9 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => setModalTab('TIERS')}
-                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`min-h-[34px] px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       modalTab === 'TIERS'
-                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        ? 'bg-white text-teal-800 shadow-2xs font-semibold border border-stone-200/80'
                         : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
                     }`}
                   >
@@ -1036,9 +1038,9 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => setModalTab('VIEW')}
-                    className={`px-2.5 py-1.5 rounded-md transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`min-h-[34px] px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                       modalTab === 'VIEW'
-                        ? 'bg-white text-stone-900 shadow-2xs font-semibold'
+                        ? 'bg-white text-teal-800 shadow-2xs font-semibold border border-stone-200/80'
                         : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/60'
                     }`}
                   >
@@ -1097,7 +1099,7 @@ export default function ProductsPage() {
                           JPG, PNG or WEBP (Max 2MB). Shown in POS cart, catalog & receipts.
                         </span>
                         <div className="mt-1.5 flex items-center gap-3">
-                          <label className="text-xs text-sky-700 hover:text-sky-900 font-medium cursor-pointer flex items-center gap-1">
+                          <label className="text-xs text-teal-700 hover:text-teal-900 font-medium cursor-pointer flex items-center gap-1">
                             <Upload size={12} />
                             <span>{uploadingImage ? 'Uploading photo...' : 'Upload Image'}</span>
                             <input
@@ -1239,18 +1241,18 @@ export default function ProductsPage() {
                     </div>
 
                     {/* Form Action Buttons */}
-                    <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-200">
+                    <div className="pt-3 flex items-center justify-end gap-2 border-t border-stone-200">
                       <button
                         type="button"
                         onClick={() => setEditingProduct(null)}
-                        className="px-3 py-1.5 border border-stone-300 text-stone-700 hover:bg-stone-100 rounded-lg text-xs font-medium cursor-pointer transition"
+                        className="min-h-[40px] px-4 border border-stone-300 text-stone-700 hover:bg-stone-100 rounded-lg text-xs font-medium cursor-pointer transition"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={isSaving}
-                        className="px-4 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1.5 transition disabled:opacity-50"
+                        className="min-h-[40px] px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition disabled:opacity-50 shadow-xs"
                       >
                         {isSaving ? (
                           <>
@@ -1385,38 +1387,38 @@ export default function ProductsPage() {
                 {/* TAB: POWER PRICING TIERS */}
                 {modalTab === 'TIERS' && (
                   <div className="space-y-4">
-                    <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="p-3 bg-teal-50/70 rounded-xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <h4 className="font-bold text-xs text-purple-950 flex items-center gap-1.5">
-                          <DollarSign size={14} className="text-purple-600" />
-                          Power & Prescription Price Tiers
+                        <h4 className="font-bold text-xs text-teal-950 flex items-center gap-1.5">
+                          <DollarSign size={14} className="text-teal-700" />
+                          Power &amp; Prescription Price Tiers
                         </h4>
-                        <p className="text-[11px] text-purple-700 mt-0.5">
+                        <p className="text-[11px] text-teal-800 mt-0.5">
                           Set custom retail prices for Plano (0.00), standard powers, high powers, or toric lenses. POS and online cart auto-select the right price.
                         </p>
                       </div>
 
                       {/* Quick Presets */}
                       <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] font-semibold text-purple-900">Presets:</span>
+                        <span className="text-[10px] font-semibold text-teal-900">Presets:</span>
                         <button
                           type="button"
                           onClick={() => handleApplyPreset('PLANO_VS_RX')}
-                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                          className="min-h-[30px] px-2.5 py-1 bg-white hover:bg-teal-100 border border-teal-300 text-teal-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
                         >
-                          <Sparkles size={10} className="text-purple-600" /> Plano vs RX (+20)
+                          <Sparkles size={10} className="text-teal-700" /> Plano vs RX (+20)
                         </button>
                         <button
                           type="button"
                           onClick={() => handleApplyPreset('THREE_TIER')}
-                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                          className="min-h-[30px] px-2.5 py-1 bg-white hover:bg-teal-100 border border-teal-300 text-teal-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
                         >
                           3-Tier (Plano/Std/High)
                         </button>
                         <button
                           type="button"
                           onClick={() => handleApplyPreset('TORIC')}
-                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
+                          className="min-h-[30px] px-2.5 py-1 bg-white hover:bg-teal-100 border border-teal-300 text-teal-900 text-[10px] font-medium rounded-md shadow-2xs cursor-pointer transition flex items-center gap-1"
                         >
                           Toric / Astigmatism
                         </button>
@@ -1452,13 +1454,13 @@ export default function ProductsPage() {
                               <div className="sm:hidden space-y-2">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="font-semibold text-stone-900 text-xs flex items-center gap-1.5 min-w-0 flex-1">
-                                    <span className="w-2 h-2 rounded-full bg-purple-600 shrink-0" />
+                                    <span className="w-2 h-2 rounded-full bg-teal-700 shrink-0" />
                                     <span className="break-words leading-tight">{tier.name}</span>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveTier(tier.id)}
-                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded shrink-0 transition cursor-pointer"
+                                    className="w-8 h-8 flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded shrink-0 transition cursor-pointer"
                                     title="Remove Tier"
                                   >
                                     <Trash2 size={14} />
@@ -1468,7 +1470,7 @@ export default function ProductsPage() {
                                 <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-100 font-mono text-xs">
                                   <div className="text-[11px] text-stone-600">
                                     {tier.requiresCylinder ? (
-                                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                      <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-semibold">
                                         Toric (Cyl)
                                       </span>
                                     ) : tier.requiresAdd ? (
@@ -1493,7 +1495,7 @@ export default function ProductsPage() {
                                       min="0"
                                       value={tier.priceQar}
                                       onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
-                                      className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
+                                      className="w-20 min-h-[34px] px-2 py-1 text-right font-bold text-[15px] sm:text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-teal-600 focus:outline-hidden"
                                     />
                                     <span className="text-[10px] text-stone-500 font-semibold">QAR</span>
                                   </div>
@@ -1503,13 +1505,13 @@ export default function ProductsPage() {
                               {/* Desktop Table Grid View */}
                               <div className="hidden sm:grid sm:grid-cols-12 gap-2 items-center text-xs">
                                 <div className="col-span-4 font-medium text-stone-900 truncate flex items-center gap-1.5 min-w-0" title={tier.name}>
-                                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 shrink-0" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-teal-700 shrink-0" />
                                   <span className="truncate">{tier.name}</span>
                                 </div>
 
                                 <div className="col-span-4 font-mono text-[11px] text-stone-600">
                                   {tier.requiresCylinder ? (
-                                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                    <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 text-[10px] font-semibold">
                                       Toric (Cyl)
                                     </span>
                                   ) : tier.requiresAdd ? (
@@ -1534,7 +1536,7 @@ export default function ProductsPage() {
                                     min="0"
                                     value={tier.priceQar}
                                     onChange={(e) => handleUpdateTierPrice(tier.id, parseFloat(e.target.value) || 0)}
-                                    className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-purple-600 focus:outline-hidden"
+                                    className="w-20 px-2 py-1 text-right font-bold text-xs bg-stone-50 border border-stone-300 rounded focus:bg-white focus:border-teal-600 focus:outline-hidden"
                                   />
                                   <span className="text-[10px] text-stone-500 font-semibold">QAR</span>
                                 </div>
@@ -1543,7 +1545,7 @@ export default function ProductsPage() {
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveTier(tier.id)}
-                                    className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition cursor-pointer"
+                                    className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition cursor-pointer"
                                     title="Remove Tier"
                                   >
                                     <Trash2 size={13} />
@@ -1572,7 +1574,7 @@ export default function ProductsPage() {
                             placeholder="e.g. Standard RX"
                             value={tierName}
                             onChange={(e) => setTierName(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs focus:outline-hidden focus:border-purple-600"
+                            className="w-full min-h-[36px] px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-[15px] sm:text-xs focus:outline-hidden focus:border-teal-600"
                           />
                         </div>
 
@@ -1585,7 +1587,7 @@ export default function ProductsPage() {
                             value={tierMin}
                             onChange={(e) => setTierMin(e.target.value)}
                             disabled={tierRequiresCyl || tierRequiresAdd}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-mono focus:outline-hidden focus:border-purple-600 disabled:opacity-40"
+                            className="w-full min-h-[36px] px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-[15px] sm:text-xs font-mono focus:outline-hidden focus:border-teal-600 disabled:opacity-40"
                           />
                         </div>
 
@@ -1598,7 +1600,7 @@ export default function ProductsPage() {
                             value={tierMax}
                             onChange={(e) => setTierMax(e.target.value)}
                             disabled={tierRequiresCyl || tierRequiresAdd}
-                            className="w-full px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-mono focus:outline-hidden focus:border-purple-600 disabled:opacity-40"
+                            className="w-full min-h-[36px] px-2.5 py-1.5 bg-white border border-stone-300 rounded-md text-[15px] sm:text-xs font-mono focus:outline-hidden focus:border-teal-600 disabled:opacity-40"
                           />
                         </div>
 
@@ -1612,9 +1614,9 @@ export default function ProductsPage() {
                               placeholder="180"
                               value={tierPrice}
                               onChange={(e) => setTierPrice(e.target.value)}
-                              className="w-full pl-2.5 pr-8 py-1.5 bg-white border border-stone-300 rounded-md text-xs font-bold font-mono focus:outline-hidden focus:border-purple-600"
+                              className="w-full min-h-[36px] pl-2.5 pr-9 py-1.5 bg-white border border-stone-300 rounded-md text-[15px] sm:text-xs font-bold font-mono focus:outline-hidden focus:border-teal-600"
                             />
-                            <span className="absolute right-2 top-1.5 text-[10px] text-stone-400 font-mono">QAR</span>
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-stone-400 font-mono">QAR</span>
                           </div>
                         </div>
                       </div>
@@ -1629,7 +1631,7 @@ export default function ProductsPage() {
                                 setTierRequiresCyl(e.target.checked);
                                 if (e.target.checked) setTierRequiresAdd(false);
                               }}
-                              className="rounded border-stone-300 text-purple-600"
+                              className="w-4 h-4 rounded border-stone-300 text-teal-700"
                             />
                             <span className="text-[11px]">Requires Cylinder (Toric)</span>
                           </label>
@@ -1642,7 +1644,7 @@ export default function ProductsPage() {
                                 setTierRequiresAdd(e.target.checked);
                                 if (e.target.checked) setTierRequiresCyl(false);
                               }}
-                              className="rounded border-stone-300 text-purple-600"
+                              className="w-4 h-4 rounded border-stone-300 text-teal-700"
                             />
                             <span className="text-[11px]">Requires Add (Multifocal)</span>
                           </label>
@@ -1650,7 +1652,7 @@ export default function ProductsPage() {
 
                         <button
                           type="submit"
-                          className="px-3 py-1.5 bg-stone-900 text-white rounded-md text-xs font-medium hover:bg-stone-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                          className="min-h-[36px] px-3.5 py-1.5 bg-stone-900 text-white rounded-md text-xs font-medium hover:bg-stone-800 transition cursor-pointer flex items-center gap-1 shadow-2xs"
                         >
                           <Plus size={12} /> Add Tier
                         </button>
@@ -1663,7 +1665,7 @@ export default function ProductsPage() {
                         type="button"
                         onClick={handleSaveTiers}
                         disabled={isSavingTiers}
-                        className="px-4 py-2 bg-purple-700 text-white rounded-lg text-xs font-bold hover:bg-purple-800 transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                        className="min-h-[40px] px-4 py-2 bg-teal-700 text-white rounded-lg text-xs font-bold hover:bg-teal-800 transition cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                       >
                         {isSavingTiers ? (
                           <>
@@ -1726,7 +1728,7 @@ export default function ProductsPage() {
                       <button
                         type="button"
                         onClick={() => setModalTab('EDIT')}
-                        className="px-3.5 py-1.5 bg-stone-900 text-white rounded-lg text-xs font-medium hover:bg-stone-800 transition cursor-pointer flex items-center gap-1.5"
+                        className="min-h-[40px] px-4 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
                       >
                         <Pencil size={12} />
                         <span>Edit Product Info</span>
@@ -1736,31 +1738,24 @@ export default function ProductsPage() {
                 )}
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </ResponsiveDialog>
 
         {/* =========================================================================
             CREATE NEW PRODUCT MODAL (+ New Product)
             ========================================================================= */}
-        {isCreateModalOpen && (
-          <div className="fixed inset-0 z-50 bg-stone-950/40 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white border border-stone-200 rounded-xl shadow-2xl w-full max-w-lg max-h-[92dvh] overflow-hidden animate-in fade-in zoom-in-95 duration-100 flex flex-col">
-              <div className="p-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-sm text-stone-900">Add New Product to Catalog</h3>
-                  <span className="text-[11px] text-stone-500">Register new optical frames, contact lenses or solutions</span>
-                </div>
-                <button
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="p-1 text-stone-400 hover:text-stone-700 rounded transition cursor-pointer"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateProduct} className="p-4 space-y-3 flex-1 overflow-y-auto">
+        <ResponsiveDialog
+          open={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          maxWidthClass="sm:max-w-lg"
+          icon={<Package size={16} className="text-teal-700" />}
+          title="Add New Product to Catalog"
+          subtitle="Register new optical frames, contact lenses or solutions"
+          bodyClassName="p-4 sm:p-5"
+        >
+              <form onSubmit={handleCreateProduct} className="space-y-3">
                 {createError && (
-                  <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded text-xs flex items-center gap-2">
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs flex items-center gap-2">
                     <AlertCircle size={14} className="shrink-0" />
                     <span>{createError}</span>
                   </div>
@@ -1777,7 +1772,7 @@ export default function ProductsPage() {
                       placeholder="e.g. Acuvue Oasys with HydraLuxe"
                       value={newTitleEn}
                       onChange={(e) => setNewTitleEn(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs focus:border-teal-600 focus:outline-none"
                     />
                   </div>
 
@@ -1792,7 +1787,7 @@ export default function ProductsPage() {
                       placeholder="الاسم بالعربية (اختياري)"
                       value={newTitleAr}
                       onChange={(e) => setNewTitleAr(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs focus:border-teal-600 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1833,7 +1828,7 @@ export default function ProductsPage() {
                       placeholder="0.00"
                       value={newSalePrice}
                       onChange={(e) => setNewSalePrice(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs font-mono font-medium focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs font-mono font-medium focus:border-teal-600 focus:outline-none"
                     />
                   </div>
 
@@ -1844,7 +1839,7 @@ export default function ProductsPage() {
                       min="1"
                       value={newMinStockAlert}
                       onChange={(e) => setNewMinStockAlert(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs font-mono focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs font-mono focus:border-teal-600 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1857,7 +1852,7 @@ export default function ProductsPage() {
                       placeholder="Leave blank to auto-generate"
                       value={newSku}
                       onChange={(e) => setNewSku(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs font-mono focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs font-mono focus:border-teal-600 focus:outline-none"
                     />
                   </div>
 
@@ -1868,7 +1863,7 @@ export default function ProductsPage() {
                       placeholder="Scan or enter barcode"
                       value={newBarcode}
                       onChange={(e) => setNewBarcode(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-xs font-mono focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                      className="w-full min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-300 text-[16px] sm:text-xs font-mono focus:border-teal-600 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1877,14 +1872,14 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-3 py-1.5 border border-stone-300 text-stone-700 hover:bg-stone-100 rounded-lg text-xs font-medium cursor-pointer"
+                    className="min-h-[42px] px-4 border border-stone-300 text-stone-700 hover:bg-stone-100 rounded-lg text-xs font-medium cursor-pointer transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isCreating}
-                    className="px-4 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1.5 transition disabled:opacity-50"
+                    className="min-h-[42px] px-4 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition disabled:opacity-50 shadow-xs"
                   >
                     {isCreating ? (
                       <>
@@ -1900,9 +1895,7 @@ export default function ProductsPage() {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
+        </ResponsiveDialog>
       </div>
 
       <BulkAvailabilityModal

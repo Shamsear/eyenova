@@ -5,8 +5,9 @@ import { Shell } from '@/components/layout/shell';
 import { useSessionStore } from '@/stores/session-store';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable, Column } from '@/components/shared/data-table';
-import { StatusIndicator } from '@/components/shared/status-indicator';
-import { Barcode, Plus, Minus, Save, RotateCcw, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Barcode, Plus, Minus, Save, AlertTriangle, CheckCircle2, Package, ClipboardCheck } from 'lucide-react';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { TouchStepper } from '@/components/ui/touch-stepper';
 
 interface AuditItem {
   id: string;
@@ -51,7 +52,24 @@ export default function StockCountPage() {
   };
 
   useEffect(() => {
-    loadSheet();
+    let active = true;
+    fetch('/api/stock-count')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.sheet) {
+          setSheet(data.sheet);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load stock sheet:', err);
+        if (active) setFeedback({ message: 'Error loading inventory sheet', isError: true });
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const updateCount = (id: string, newCount: number) => {
@@ -118,8 +136,11 @@ export default function StockCountPage() {
       setFeedback({ message: `Successfully adjusted ${varianceItems.length} items in the database.` });
       setTimeout(() => setFeedback(null), 3500);
       loadSheet();
-    } catch (err: any) {
-      setFeedback({ message: err.message || 'Error saving reconciliation', isError: true });
+    } catch (err: unknown) {
+      setFeedback({
+        message: err instanceof Error ? err.message : 'Error saving reconciliation',
+        isError: true,
+      });
     } finally {
       setCommitting(false);
     }
@@ -152,6 +173,7 @@ export default function StockCountPage() {
       key: 'systemQty',
       header: 'System Expected',
       align: 'center',
+      priority: 'standard',
       render: (item) => (
         <span className="font-mono text-xs text-stone-600 tabular-nums">
           {item.systemQty}
@@ -167,22 +189,24 @@ export default function StockCountPage() {
           <button
             type="button"
             onClick={() => updateCount(item.id, item.countedQty - 1)}
-            className="w-5 h-5 rounded border border-stone-200 bg-white hover:bg-stone-100 flex items-center justify-center text-stone-600 cursor-pointer"
+            aria-label={`Decrease count for ${item.name}`}
+            className="w-7 h-7 rounded-md border border-stone-200 bg-white hover:bg-stone-100 flex items-center justify-center text-stone-600 cursor-pointer transition"
           >
-            <Minus size={10} />
+            <Minus size={11} />
           </button>
           <input
             type="number"
             value={item.countedQty}
             onChange={(e) => updateCount(item.id, parseInt(e.target.value, 10) || 0)}
-            className="w-12 h-6 text-center text-xs font-mono font-medium bg-stone-50 border border-stone-200 rounded"
+            className="w-14 h-7 text-center text-xs font-mono font-semibold bg-stone-50 border border-stone-200 rounded-md focus:bg-white focus:border-teal-600 focus:outline-none"
           />
           <button
             type="button"
             onClick={() => updateCount(item.id, item.countedQty + 1)}
-            className="w-5 h-5 rounded border border-stone-200 bg-white hover:bg-stone-100 flex items-center justify-center text-stone-600 cursor-pointer"
+            aria-label={`Increase count for ${item.name}`}
+            className="w-7 h-7 rounded-md border border-stone-200 bg-white hover:bg-stone-100 flex items-center justify-center text-stone-600 cursor-pointer transition"
           >
-            <Plus size={10} />
+            <Plus size={11} />
           </button>
         </div>
       ),
@@ -214,40 +238,44 @@ export default function StockCountPage() {
       subtitle="Barcode Reconciliation & Inventory Ledger Adjustments"
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-4 space-y-3 overflow-hidden">
-        {/* KPI Strip (Strictly Single-Line) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">System Expected</span>
-            <span className="font-mono font-medium text-base text-stone-900 tabular-nums">{totalSystemUnits} Units</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Physical Counted</span>
-            <span className="font-mono font-medium text-base text-stone-900 tabular-nums">{totalCountedUnits} Units</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Discrepancies</span>
-            <span className={`font-mono font-medium text-base tabular-nums ${totalVariances > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
-              {totalVariances} Items
-            </span>
-          </div>
+        {/* KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 shrink-0">
+          <KpiCard
+            label="System Expected"
+            value={`${totalSystemUnits} Units`}
+            icon={<Package size={15} />}
+          />
+          <KpiCard
+            label="Physical Counted"
+            value={`${totalCountedUnits} Units`}
+            tone="teal"
+            icon={<ClipboardCheck size={15} />}
+          />
+          <KpiCard
+            label="Discrepancies"
+            value={`${totalVariances} Items`}
+            tone={totalVariances > 0 ? 'rose' : 'emerald'}
+            icon={<AlertTriangle size={15} />}
+            className="col-span-2 sm:col-span-1"
+          />
         </div>
 
         {/* Scan Input Bar & Feedback Alert */}
-        <div className="bg-white p-2.5 rounded-lg border border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2 shrink-0">
+        <div className="bg-white p-2.5 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
           <form onSubmit={handleScanSubmit} className="flex items-center gap-2 w-full sm:w-auto flex-1 min-w-0">
             <div className="relative flex-1 sm:max-w-xs">
-              <Barcode size={14} className="absolute left-2.5 top-2 text-stone-400 pointer-events-none" />
+              <Barcode size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
               <input
                 type="text"
                 value={scanInput}
                 onChange={(e) => setScanInput(e.target.value)}
                 placeholder="Scan Barcode to increment count (+1)..."
-                className="w-full pl-8 pr-3 py-1.5 bg-stone-50 border border-stone-200 rounded-md text-xs font-mono focus:bg-white focus:outline-hidden"
+                className="w-full min-h-[38px] pl-8 pr-3 py-1.5 bg-stone-50 border border-stone-200 rounded-lg text-[16px] sm:text-xs font-mono focus:bg-white focus:border-teal-600 focus:outline-hidden"
               />
             </div>
             <button
               type="submit"
-              className="px-2.5 py-1.5 rounded-md bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] px-3.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition cursor-pointer whitespace-nowrap shadow-xs"
             >
               Add Scan
             </button>
@@ -255,8 +283,10 @@ export default function StockCountPage() {
 
           {feedback && (
             <div
-              className={`p-1.5 rounded text-xs flex items-center gap-1.5 truncate max-w-sm ${
-                feedback.isError ? 'bg-stone-50 text-rose-700 border border-rose-200' : 'bg-stone-50 text-emerald-700 border border-emerald-200'
+              className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 truncate max-w-sm ${
+                feedback.isError
+                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               }`}
             >
               {feedback.isError ? <AlertTriangle size={13} className="shrink-0" /> : <CheckCircle2 size={13} className="shrink-0" />}
@@ -287,6 +317,7 @@ export default function StockCountPage() {
           data={sheet}
           columns={columns}
           keyExtractor={(item) => item.id}
+          loading={loading}
           searchQuery={search}
           searchFields={[
             (item) => item.sku,
@@ -322,32 +353,20 @@ export default function StockCountPage() {
                 </span>
               </div>
 
-              {/* Tier 3: Expected vs Counted (Strictly Single-Line) */}
-              <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-100 text-xs">
-                <span className="text-[10px] font-mono text-stone-500">
-                  Expected: {item.systemQty}
+              {/* Tier 3: Expected vs Counted */}
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-100 text-xs">
+                <span className="text-[11px] font-mono text-stone-500">
+                  Expected: <strong className="text-stone-800">{item.systemQty}</strong>
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono text-stone-500">Counted:</span>
-                  <div className="flex items-center border border-stone-200 rounded bg-white">
-                    <button
-                      type="button"
-                      onClick={() => updateCount(item.id, item.countedQty - 1)}
-                      className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 cursor-pointer"
-                    >
-                      <Minus size={9} />
-                    </button>
-                    <span className="w-7 text-center font-mono text-xs font-medium text-stone-900 tabular-nums">
-                      {item.countedQty}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => updateCount(item.id, item.countedQty + 1)}
-                      className="w-5 h-5 flex items-center justify-center text-stone-600 hover:bg-stone-100 cursor-pointer"
-                    >
-                      <Plus size={9} />
-                    </button>
-                  </div>
+                  <TouchStepper
+                    value={item.countedQty}
+                    size="touch"
+                    disableDecrement={item.countedQty <= 0}
+                    onDecrement={() => updateCount(item.id, item.countedQty - 1)}
+                    onIncrement={() => updateCount(item.id, item.countedQty + 1)}
+                  />
                 </div>
               </div>
             </>

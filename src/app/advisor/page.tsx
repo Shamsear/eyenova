@@ -56,42 +56,42 @@ export default function AdvisorPage() {
       subtitle="Automated inventory reorder thresholds and FEFO expiry mitigations"
     >
       <div className="flex-1 min-h-0 p-3 sm:p-5 overflow-y-auto space-y-4 bg-stone-100/60">
-        {/* Typographic Header Card - strictly 1 line per row */}
-        <div className="p-4 bg-white border border-stone-200 rounded-lg flex items-center justify-between gap-4">
+        {/* Typographic Header Card */}
+        <div className="p-4 bg-white border border-stone-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
+            <span className="text-[10px] font-mono font-semibold text-teal-700 uppercase tracking-wider block truncate">
               Intelligence Engine
             </span>
             <h2 className="text-sm font-semibold text-stone-900 truncate mt-0.5">
-              Optical Inventory & Velocity Analysis
+              Optical Inventory &amp; Velocity Analysis
             </h2>
             <p className="text-xs text-stone-500 truncate mt-0.5">
               Real-time audit of contact lens batches, reorder cycles, and FEFO expiry risk
             </p>
           </div>
-          <div className="text-right shrink-0 font-mono">
-            <span className="text-[10px] text-stone-400 block uppercase tracking-wider">Catalog Health</span>
-            <span className="text-sm font-semibold text-stone-900 block">{healthyStockCount} Stable SKUs</span>
+          <div className="sm:text-right shrink-0 font-mono bg-teal-50/70 border border-teal-200 rounded-lg px-3 py-2">
+            <span className="text-[10px] text-teal-700 block uppercase tracking-wider">Catalog Health</span>
+            <span className="text-sm font-bold text-teal-900 block tabular-nums">{healthyStockCount} Stable SKUs</span>
           </div>
         </div>
 
         {loading ? (
           <div className="py-16 text-center text-xs text-stone-500 flex items-center justify-center gap-2">
-            <Loader2 size={16} className="animate-spin text-stone-400" />
+            <Loader2 size={16} className="animate-spin text-teal-700" />
             <span className="font-mono">Analyzing stock velocity and expiration dates...</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {/* Reorder Suggestions */}
-            <div className="bg-white p-3.5 rounded-lg border border-stone-200 space-y-3">
+            <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-stone-200">
                 <div className="flex items-center gap-1.5 text-stone-900 font-semibold text-xs">
-                  <TrendingUp size={14} className="text-stone-500" />
+                  <TrendingUp size={14} className="text-teal-700" />
                   <span>Reorder Suggestions ({lowStockSuggestions.length})</span>
                 </div>
                 <Link
                   href="/purchases"
-                  className="text-xs font-mono text-stone-600 hover:text-stone-900 flex items-center gap-1"
+                  className="min-h-[30px] px-2.5 rounded-md bg-teal-50 border border-teal-200 text-xs font-mono font-semibold text-teal-800 hover:bg-teal-100 flex items-center gap-1 transition"
                 >
                   <ShoppingCart size={12} />
                   <span>Create PO</span>
@@ -105,7 +105,7 @@ export default function AdvisorPage() {
                   {lowStockSuggestions.map((item) => (
                     <div
                       key={item.id}
-                      className="p-2.5 bg-stone-50 rounded border border-stone-200 flex items-center justify-between gap-3 text-xs"
+                      className="p-2.5 bg-stone-50 rounded-lg border border-stone-200 flex items-center justify-between gap-3 text-xs"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-stone-900 truncate">{item.title}</div>
@@ -114,10 +114,10 @@ export default function AdvisorPage() {
                         </div>
                       </div>
                       <div className="text-right shrink-0 font-mono">
-                        <span className="font-medium text-stone-900 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded text-[11px] block tabular-nums">
+                        <span className="font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[11px] block tabular-nums">
                           {item.stockQuantity} in stock
                         </span>
-                        <span className="text-[10px] text-stone-500 mt-0.5 block tabular-nums">
+                        <span className="text-[10px] text-teal-700 font-semibold mt-0.5 block tabular-nums">
                           +{item.suggestedReorder} pcs
                         </span>
                       </div>
@@ -128,15 +128,15 @@ export default function AdvisorPage() {
             </div>
 
             {/* Expiring Batches FEFO */}
-            <div className="bg-white p-3.5 rounded-lg border border-stone-200 space-y-3">
+            <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-stone-200">
                 <div className="flex items-center gap-1.5 text-stone-900 font-semibold text-xs">
-                  <AlertTriangle size={14} className="text-stone-500" />
+                  <AlertTriangle size={14} className="text-amber-600" />
                   <span>FEFO Expiry Mitigation ({expiringBatches.length})</span>
                 </div>
                 <Link
                   href="/batches"
-                  className="text-xs font-mono text-stone-600 hover:text-stone-900 flex items-center gap-1"
+                  className="min-h-[30px] px-2.5 rounded-md bg-stone-100 border border-stone-200 text-xs font-mono font-semibold text-stone-700 hover:bg-stone-200 flex items-center gap-1 transition"
                 >
                   <PackageCheck size={12} />
                   <span>View Batches</span>
@@ -150,7 +150,7 @@ export default function AdvisorPage() {
                   {expiringBatches.map((batch) => (
                     <div
                       key={batch.id}
-                      className="p-2.5 bg-stone-50 rounded border border-stone-200 flex items-center justify-between gap-3 text-xs"
+                      className="p-2.5 bg-stone-50 rounded-lg border border-stone-200 flex items-center justify-between gap-3 text-xs"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-stone-900 truncate">{batch.productName}</div>
@@ -159,7 +159,15 @@ export default function AdvisorPage() {
                         </div>
                       </div>
                       <div className="text-right shrink-0 font-mono">
-                        <span className="font-medium text-stone-900 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded text-[11px] block tabular-nums">
+                        <span
+                          className={`font-medium border px-1.5 py-0.5 rounded text-[11px] block tabular-nums ${
+                            batch.daysUntilExpiry <= 0
+                              ? 'text-rose-800 bg-rose-50 border-rose-200'
+                              : batch.daysUntilExpiry <= 90
+                              ? 'text-amber-800 bg-amber-50 border-amber-200'
+                              : 'text-stone-900 bg-stone-100 border-stone-300'
+                          }`}
+                        >
                           Exp: {batch.expiryDate}
                         </span>
                         <span className="text-[10px] text-stone-500 mt-0.5 block tabular-nums">

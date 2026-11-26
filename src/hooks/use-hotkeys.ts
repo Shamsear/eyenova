@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export interface HotkeyHandlers {
+  enabled?: boolean;
+  enableNavigation?: boolean;
+  onCommandPalette?: () => void;
   onF1?: () => void; // Search focus
   onF2?: () => void; // Customer modal
   onF3?: () => void; // Hold current sale
@@ -22,11 +25,23 @@ export interface HotkeyHandlers {
 
 export function useHotkeys(handlers: HotkeyHandlers) {
   const router = useRouter();
+  const { enabled = true, enableNavigation = false } = handlers;
 
   useEffect(() => {
+    if (!enabled) return;
+
     function handleKeyDown(e: KeyboardEvent) {
-      // Handle Ctrl+Number global navigation (Ctrl+1 to Ctrl+0)
-      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+      // Global Command Palette (Ctrl+K or Cmd+K)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        if (handlers.onCommandPalette) {
+          e.preventDefault();
+          handlers.onCommandPalette();
+          return;
+        }
+      }
+
+      // Global Ctrl+Number navigation (aligned 1:1 with src/lib/navigation.ts)
+      if (enableNavigation && e.ctrlKey && !e.shiftKey && !e.altKey) {
         switch (e.key) {
           case '1':
             e.preventDefault();
@@ -50,11 +65,11 @@ export function useHotkeys(handlers: HotkeyHandlers) {
             return;
           case '6':
             e.preventDefault();
-            router.push('/batches');
+            router.push('/cardex');
             return;
           case '7':
             e.preventDefault();
-            router.push('/stock-count');
+            router.push('/channels');
             return;
           case '8':
             e.preventDefault();
@@ -66,7 +81,7 @@ export function useHotkeys(handlers: HotkeyHandlers) {
             return;
           case '0':
             e.preventDefault();
-            router.push('/online-stock');
+            router.push('/dashboard');
             return;
         }
       }
@@ -80,62 +95,84 @@ export function useHotkeys(handlers: HotkeyHandlers) {
 
       switch (e.key) {
         case 'F1':
-          e.preventDefault();
-          handlers.onF1?.();
+          if (handlers.onF1) {
+            e.preventDefault();
+            handlers.onF1();
+          }
           break;
         case 'F2':
-          e.preventDefault();
-          handlers.onF2?.();
+          if (handlers.onF2) {
+            e.preventDefault();
+            handlers.onF2();
+          }
           break;
         case 'F3':
-          e.preventDefault();
-          handlers.onF3?.();
+          if (handlers.onF3) {
+            e.preventDefault();
+            handlers.onF3();
+          }
           break;
         case 'F4':
-          e.preventDefault();
-          handlers.onF4?.();
+          if (handlers.onF4) {
+            e.preventDefault();
+            handlers.onF4();
+          }
           break;
         case 'F6':
-          e.preventDefault();
-          handlers.onF6?.();
+          if (handlers.onF6) {
+            e.preventDefault();
+            handlers.onF6();
+          }
           break;
         case 'F7':
-          e.preventDefault();
-          handlers.onF7?.();
+          if (handlers.onF7) {
+            e.preventDefault();
+            handlers.onF7();
+          }
           break;
         case 'F8':
-          e.preventDefault();
-          handlers.onF8?.();
+          if (handlers.onF8) {
+            e.preventDefault();
+            handlers.onF8();
+          }
           break;
         case 'F9':
-          e.preventDefault();
-          handlers.onF9?.();
+          if (handlers.onF9) {
+            e.preventDefault();
+            handlers.onF9();
+          }
           break;
         case 'F10':
-          e.preventDefault();
-          handlers.onF10?.();
+          if (handlers.onF10) {
+            e.preventDefault();
+            handlers.onF10();
+          }
           break;
         case 'F11':
-          e.preventDefault();
-          handlers.onF11?.();
+          if (handlers.onF11) {
+            e.preventDefault();
+            handlers.onF11();
+          }
           break;
         case 'F12':
-          e.preventDefault();
-          handlers.onF12?.();
+          if (handlers.onF12) {
+            e.preventDefault();
+            handlers.onF12();
+          }
           break;
         case 'Escape':
           handlers.onEscape?.();
           break;
         case '+':
-          if (!isInput) {
+          if (!isInput && handlers.onPlus) {
             e.preventDefault();
-            handlers.onPlus?.();
+            handlers.onPlus();
           }
           break;
         case '-':
-          if (!isInput) {
+          if (!isInput && handlers.onMinus) {
             e.preventDefault();
-            handlers.onMinus?.();
+            handlers.onMinus();
           }
           break;
       }
@@ -143,5 +180,5 @@ export function useHotkeys(handlers: HotkeyHandlers) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handlers]);
+  }, [enabled, enableNavigation, handlers, router]);
 }

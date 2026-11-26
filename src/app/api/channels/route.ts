@@ -11,6 +11,9 @@ function getChannelKey(orderSource: string | null, paymentMethod: string | null)
   if (s === 'TALABAT' || m === 'TALABAT') return 'TALABAT';
   if (s === 'RAFEEQ' || m === 'RAFEEQ') return 'RAFEEQ';
   if (s === 'IN_STORE_POS' || s === 'POS' || m === 'IN_STORE_POS' || m === 'IN_STORE_PAYMENT') return 'IN_STORE_POS';
+  if (s.includes('SHOPIFY')) return 'SHOPIFY';
+  if (s.includes('WEBSITE') || s.includes('WEB')) return 'WEBSITE';
+  if (s.includes('WHATSAPP')) return 'WHATSAPP';
   return 'ONLINE_OTHER';
 }
 
@@ -24,6 +27,12 @@ function getChannelInfo(key: string) {
       return { name: 'Talabat Delivery', badgeBg: 'bg-orange-50 text-orange-600 border-orange-200', icon: 'truck' };
     case 'RAFEEQ':
       return { name: 'Rafeeq Delivery', badgeBg: 'bg-rose-50 text-rose-800 border-rose-200', icon: 'truck' };
+    case 'SHOPIFY':
+      return { name: 'Shopify Store', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'shopping-bag' };
+    case 'WEBSITE':
+      return { name: 'Online Website', badgeBg: 'bg-purple-50 text-purple-700 border-purple-200', icon: 'globe' };
+    case 'WHATSAPP':
+      return { name: 'WhatsApp Orders', badgeBg: 'bg-teal-50 text-teal-700 border-teal-200', icon: 'message-circle' };
     default:
       return { name: 'Website & Online', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'globe' };
   }
@@ -31,6 +40,18 @@ function getChannelInfo(key: string) {
 
 const PAYOUT_COMM_REGEX = /Comm\s+([0-9\.]+)\s*QAR/i;
 const NOTE_COMM_PCT_REGEX = /Comm:\s*([0-9\.]+)%/i;
+
+function isCashPayment(method?: string | null): boolean {
+  if (!method) return true;
+  const m = method.trim().toUpperCase();
+  return ['CASH', 'IN_STORE_PAYMENT', 'IN_STORE_POS', 'CASH_ON_DELIVERY', 'TILL', 'COD'].includes(m) || m.includes('CASH');
+}
+
+function isCardPayment(method?: string | null): boolean {
+  if (!method) return false;
+  const m = method.trim().toUpperCase();
+  return ['CARD', 'CREDIT_CARD', 'DEBIT_CARD', 'POS_CARD', 'VISA', 'MASTERCARD', 'AMEX'].includes(m) || m.includes('CARD') || m.includes('CREDIT');
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -143,20 +164,28 @@ export async function GET(req: NextRequest) {
 
       if (chKey === 'SNOONU' || chKey === 'TALABAT' || chKey === 'RAFEEQ') {
         const note = o.notes || '';
+        const isPaidAndSettled = (o.paymentStatus === 'PAID' && (note.includes('Payout') || note.includes('Settled')));
         const commMatch = note.match(PAYOUT_COMM_REGEX);
-        if (commMatch && parseFloat(commMatch[1])) {
+
+        if (isPaidAndSettled && commMatch && parseFloat(commMatch[1])) {
           commQar = parseFloat(commMatch[1]);
           commPct = netSold > 0 ? Math.round((commQar / netSold) * 1000) / 10 : 0;
           settlementStatus = 'SETTLED';
-        } else {
+        } else if (isPaidAndSettled) {
           const pctMatch = note.match(NOTE_COMM_PCT_REGEX);
           if (pctMatch && parseFloat(pctMatch[1])) {
             commPct = parseFloat(pctMatch[1]);
+            commQar = Math.round(netSold * (commPct / 100) * 100) / 100;
           } else {
-            commPct = chKey === 'SNOONU' ? 15 : (chKey === 'TALABAT' ? 18 : 12);
+            commPct = 0;
+            commQar = 0;
           }
-          commQar = Math.round(netSold * (commPct / 100) * 100) / 100;
-          settlementStatus = (o.paymentStatus === 'PAID' && note.includes('Payout')) ? 'SETTLED' : 'PENDING_PAYOUT';
+          settlementStatus = 'SETTLED';
+        } else {
+          // PENDING: Do NOT put default commission!
+          commPct = 0;
+          commQar = 0;
+          settlementStatus = 'PENDING_PAYOUT';
         }
       } else {
         commPct = 0;
@@ -164,7 +193,7 @@ export async function GET(req: NextRequest) {
         settlementStatus = 'SETTLED';
       }
 
-      const netPayout = netSold - commQar;
+      const netPayout = (settlementStatus === 'SETTLED') ? (netSold - commQar) : netSold;
       const netProfit = netPayout - orderCogs;
       const profitMargin = netSold > 0 ? Math.round((netProfit / netSold) * 1000) / 10 : 0;
 
@@ -212,11 +241,11 @@ export async function GET(req: NextRequest) {
       const disc = list.reduce((acc, x) => acc + x.discountQar, 0);
       const net = list.reduce((acc, x) => acc + x.netSoldQar, 0);
       const cogs = list.reduce((acc, x) => acc + x.totalCogsQar, 0);
-      const comm = list.reduce((acc, x) => acc + x.commissionQar, 0);
+      const comm = list.filter((x) => x.settlementStatus === 'SETTLED').reduce((acc, x) => acc + x.commissionQar, 0);
       const profit = net - cogs - comm;
       const margin = net > 0 ? Math.round((profit / net) * 1000) / 10 : 0;
       const settled = list.filter((x) => x.settlementStatus === 'SETTLED').reduce((acc, x) => acc + x.netPayoutQar, 0);
-      const pending = list.filter((x) => x.settlementStatus === 'PENDING_PAYOUT').reduce((acc, x) => acc + x.netPayoutQar, 0);
+      const pending = list.filter((x) => x.settlementStatus === 'PENDING_PAYOUT').reduce((acc, x) => acc + x.netSoldQar, 0);
 
       channelComparisons.push({
         channelKey: key,
@@ -237,18 +266,21 @@ export async function GET(req: NextRequest) {
     channelComparisons.sort((a, b) => b.netSalesQar - a.netSalesQar);
 
     // 5. Overall Summary
+    const settledOrders = orderRows.filter((x) => x.settlementStatus === 'SETTLED');
+    const pendingOrders = orderRows.filter((x) => x.settlementStatus === 'PENDING_PAYOUT');
+
     const totalOrders = orderRows.length;
     const grossSales = orderRows.reduce((acc, x) => acc + x.grossSoldQar, 0);
     const totalDiscounts = orderRows.reduce((acc, x) => acc + x.discountQar, 0);
     const netSales = orderRows.reduce((acc, x) => acc + x.netSoldQar, 0);
     const totalCogs = orderRows.reduce((acc, x) => acc + x.totalCogsQar, 0);
-    const totalCommission = orderRows.reduce((acc, x) => acc + x.commissionQar, 0);
+    const totalCommission = settledOrders.reduce((acc, x) => acc + x.commissionQar, 0);
     const netProfit = netSales - totalCogs - totalCommission;
     const profitMargin = netSales > 0 ? Math.round((netProfit / netSales) * 1000) / 10 : 0;
-    const settledAmount = orderRows.filter((x) => x.settlementStatus === 'SETTLED').reduce((acc, x) => acc + x.netPayoutQar, 0);
-    const pendingPayout = orderRows.filter((x) => x.settlementStatus === 'PENDING_PAYOUT').reduce((acc, x) => acc + x.netPayoutQar, 0);
-    const cashSales = orderRows.filter((x) => x.paymentMethod.toUpperCase().includes('CASH')).reduce((acc, x) => acc + x.netSoldQar, 0);
-    const cardSales = orderRows.filter((x) => x.paymentMethod.toUpperCase().includes('CARD') || x.paymentMethod.toUpperCase().includes('CREDIT')).reduce((acc, x) => acc + x.netSoldQar, 0);
+    const settledAmount = settledOrders.reduce((acc, x) => acc + x.netPayoutQar, 0);
+    const pendingPayout = pendingOrders.reduce((acc, x) => acc + x.netSoldQar, 0);
+    const cashSales = orderRows.filter((x) => isCashPayment(x.paymentMethod)).reduce((acc, x) => acc + x.netSoldQar, 0);
+    const cardSales = orderRows.filter((x) => isCardPayment(x.paymentMethod)).reduce((acc, x) => acc + x.netSoldQar, 0);
 
     const overallSummary = {
       totalOrders,
@@ -261,6 +293,8 @@ export async function GET(req: NextRequest) {
       profitMarginPercent: profitMargin,
       settledAmountQar: settledAmount,
       pendingPayoutQar: pendingPayout,
+      settledOrdersCount: settledOrders.length,
+      pendingOrdersCount: pendingOrders.length,
       cashSalesQar: cashSales,
       cardSalesQar: cardSales
     };

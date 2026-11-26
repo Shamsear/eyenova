@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
-  X,
   Upload,
   FileSpreadsheet,
   CheckCircle2,
@@ -20,6 +19,7 @@ import {
   Plus,
   Minus,
 } from 'lucide-react';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 interface ProductPlanItem {
   productId: string;
@@ -103,7 +103,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
   } | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBrandFilter, setSelectedBrandFilter] = useState('ALL');
+  const [selectedBrandFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState<'ALL' | 'CHANGED' | 'UNCHANGED' | 'MATCHED' | 'UNLISTED' | 'UNMATCHED'>('ALL');
   const [expandedProductIds, setExpandedProductIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -321,11 +321,6 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
     });
   }, [effectiveProducts, searchQuery, selectedBrandFilter, activeTab]);
 
-  // Reset to page 1 on filter, tab, or search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedBrandFilter, activeTab]);
-
   const totalItems = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -335,38 +330,52 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
     return filteredProducts.slice(start, start + pageSize);
   }, [filteredProducts, safeCurrentPage, pageSize]);
 
-  // Hook count and order is always consistent. Safe to conditionally render now.
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
-      <div className="flex flex-col w-full max-w-5xl h-[100dvh] sm:h-[92vh] sm:max-h-[92vh] bg-white rounded-none sm:rounded-2xl shadow-2xl overflow-hidden border-0 sm:border sm:border-neutral-200 animate-in fade-in zoom-in-95 duration-150">
-        
-        {/* MODAL HEADER */}
-        <div className="flex items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 border-b border-neutral-200 bg-neutral-900 text-white shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-xs sm:text-base font-bold tracking-tight truncate">
-                Bulk Diopter Availability &amp; Shopify Sync
-              </h2>
-              <p className="text-[10px] sm:text-xs text-neutral-400 truncate">
-                Preview Before &amp; After diopters on Shopify &amp; POS (Stock counts stay untouched)
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition shrink-0 ml-2"
-          >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+    <ResponsiveDialog
+      open={isOpen}
+      onClose={onClose}
+      disableDismiss={isSyncing}
+      maxWidthClass="sm:max-w-5xl"
+      icon={
+        <div className="p-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
+          <Sparkles className="w-4 h-4" />
         </div>
+      }
+      title="Bulk Diopter Availability & Shopify Sync"
+      subtitle="Preview Before & After diopters on Shopify & POS (Stock counts stay untouched)"
+      bodyClassName="p-3 sm:p-5 space-y-3 sm:space-y-4 bg-white"
+      footer={
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSyncing}
+            className="w-full sm:w-auto min-h-[44px] px-4 text-xs font-semibold rounded-xl border border-stone-300 bg-white hover:bg-stone-100 text-stone-700 transition text-center cursor-pointer"
+          >
+            Close
+          </button>
 
-        {/* MODAL BODY (Master scrollable area) */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 overscroll-contain">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            {isSyncing && (
+              <div className="flex items-center justify-center gap-2 text-xs text-stone-600 font-medium">
+                <RefreshCw className="w-4 h-4 animate-spin text-teal-700" />
+                <span className="truncate">{syncProgress || 'Processing...'}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleApplySync}
+              disabled={!previewData || isSyncing}
+              className="w-full sm:w-auto min-h-[44px] px-5 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4 text-teal-200" />
+              <span>Proceed &amp; Sync to Shopify Storefront</span>
+            </button>
+          </div>
+        </div>
+      }
+    >
 
           {/* FILE UPLOAD & CONFIGURATION SECTION */}
           <div className="bg-neutral-50 rounded-xl p-3 sm:p-4 border border-neutral-200 space-y-3 shrink-0">
@@ -460,7 +469,7 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                 type="button"
                 onClick={handleFetchPreview}
                 disabled={!selectedFile || isLoadingPreview || isSyncing}
-                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center justify-center gap-2"
+                className="w-full sm:w-auto min-h-[42px] px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isLoadingPreview ? (
                   <>
@@ -579,30 +588,39 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
               {/* SEARCH & FILTER BAR WITH BEFORE/AFTER TABS */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shrink-0">
                 <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-neutral-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-400" />
                   <input
                     type="text"
                     placeholder="Search title, brand, SKU, power..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full min-h-[38px] pl-8 pr-3 py-1.5 text-[16px] sm:text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-teal-600 focus:bg-white"
                   />
                 </div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <button
-                    onClick={() => setActiveTab('ALL')}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap ${
+                    onClick={() => {
+                      setActiveTab('ALL');
+                      setCurrentPage(1);
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                       activeTab === 'ALL'
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                     }`}
                   >
                     All ({effectiveProducts.length})
                   </button>
                   <button
-                    onClick={() => setActiveTab('CHANGED')}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition whitespace-nowrap flex items-center gap-1 ${
+                    onClick={() => {
+                      setActiveTab('CHANGED');
+                      setCurrentPage(1);
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 text-xs font-bold rounded-lg transition whitespace-nowrap flex items-center gap-1 cursor-pointer ${
                       activeTab === 'CHANGED'
                         ? 'bg-amber-600 text-white'
                         : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
@@ -611,29 +629,38 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
                     <span>Changed ({effectiveSummary.productsWithChangesCount})</span>
                   </button>
                   <button
-                    onClick={() => setActiveTab('UNCHANGED')}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap ${
+                    onClick={() => {
+                      setActiveTab('UNCHANGED');
+                      setCurrentPage(1);
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                       activeTab === 'UNCHANGED'
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                     }`}
                   >
                     Unchanged ({effectiveSummary.productsUnchangedCount})
                   </button>
                   <button
-                    onClick={() => setActiveTab('UNLISTED')}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap ${
+                    onClick={() => {
+                      setActiveTab('UNLISTED');
+                      setCurrentPage(1);
+                    }}
+                    className={`min-h-[34px] px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                       activeTab === 'UNLISTED'
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                     }`}
                   >
                     Unlisted ({effectiveProducts.filter((p) => p.isUnlisted).length})
                   </button>
                   {previewData.unmatchedRows.length > 0 && (
                     <button
-                      onClick={() => setActiveTab('UNMATCHED')}
-                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap ${
+                      onClick={() => {
+                        setActiveTab('UNMATCHED');
+                        setCurrentPage(1);
+                      }}
+                      className={`min-h-[34px] px-2.5 py-1 text-xs font-semibold rounded-lg transition whitespace-nowrap cursor-pointer ${
                         activeTab === 'UNMATCHED'
                           ? 'bg-rose-600 text-white'
                           : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
@@ -1259,36 +1286,6 @@ export function BulkAvailabilityModal({ isOpen, onClose, onSuccess }: BulkAvaila
               )}
             </div>
           )}
-        </div>
-
-        {/* MODAL FOOTER */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 px-3.5 py-3 sm:px-6 sm:py-4 border-t border-neutral-200 bg-neutral-50 shrink-0">
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold rounded-xl border border-neutral-300 hover:bg-neutral-100 text-neutral-700 transition text-center"
-          >
-            Close
-          </button>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {isSyncing && (
-              <div className="flex items-center justify-center gap-2 text-xs text-neutral-600 font-medium">
-                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
-                <span className="truncate">{syncProgress || 'Processing...'}</span>
-              </div>
-            )}
-
-            <button
-              onClick={handleApplySync}
-              disabled={!previewData || isSyncing}
-              className="w-full sm:w-auto px-5 py-2.5 bg-neutral-900 hover:bg-black disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Proceed &amp; Sync to Shopify Storefront</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </ResponsiveDialog>
   );
 }

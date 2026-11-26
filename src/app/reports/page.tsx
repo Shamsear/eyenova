@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { Shell } from '@/components/layout/shell';
 import { formatQar } from '@/lib/utils';
 import { DataTable, Column } from '@/components/shared/data-table';
-import { TrendingUp, DollarSign, Download, Loader2 } from 'lucide-react';
+import { TrendingUp, DollarSign, Download, Wallet, Receipt } from 'lucide-react';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { KpiStripSkeleton } from '@/components/ui/skeletons';
 
 interface RecentSalePeriod {
   period: string;
@@ -32,19 +34,21 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchReports() {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/reports');
-        const data = await res.json();
-        if (data.stats) setStats(data.stats);
-      } catch (err) {
+    let active = true;
+    fetch('/api/reports')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.stats) setStats(data.stats);
+      })
+      .catch((err) => {
         console.error('Error fetching reports:', err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchReports();
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleExportCsv = () => {
@@ -74,6 +78,7 @@ export default function ReportsPage() {
     {
       key: 'orders',
       header: 'Orders',
+      priority: 'standard',
       className: 'w-24 text-center whitespace-nowrap',
       render: (r) => (
         <span className="font-mono text-xs tabular-nums text-stone-700 truncate block">
@@ -94,6 +99,7 @@ export default function ReportsPage() {
     {
       key: 'cost',
       header: 'Est. Cost',
+      priority: 'wide',
       className: 'w-32 text-right whitespace-nowrap',
       render: (r) => (
         <span className="font-mono text-xs text-stone-500 tabular-nums truncate block">
@@ -130,61 +136,44 @@ export default function ReportsPage() {
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-3 sm:gap-4 overflow-y-auto bg-stone-100/60">
         {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-stone-400 gap-2">
-            <Loader2 size={20} className="animate-spin text-stone-600" />
-            <span className="text-xs font-mono">Computing financial metrics...</span>
-          </div>
+          <KpiStripSkeleton />
         ) : (
           <>
-            {/* Typographic KPI Cards - strictly 1 line */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
-              <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-                <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-                  Today&apos;s Gross Revenue
-                </span>
-                <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-                  {formatQar(stats?.todayRevenue || 0)}
-                </div>
-                <span className="text-[11px] text-stone-500 mt-0.5 block truncate">
-                  Live registered sales
-                </span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-                <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-                  Today&apos;s Transactions
-                </span>
-                <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-                  {stats?.todayCount || 0} Orders
-                </div>
-                <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-                  Completed customer billings
-                </span>
-              </div>
-
-              <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-                <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-                  Estimated Gross Margin
-                </span>
-                <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-                  {formatQar((stats?.todayRevenue || 0) * 0.45)}
-                </div>
-                <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-                  ~45% Average retail optical margin
-                </span>
-              </div>
+            {/* KPI Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+              <KpiCard
+                label="Today's Gross Revenue"
+                value={formatQar(stats?.todayRevenue || 0)}
+                sublabel="Live registered sales"
+                tone="teal"
+                icon={<Wallet size={15} />}
+              />
+              <KpiCard
+                label="Today's Transactions"
+                value={`${stats?.todayCount || 0} Orders`}
+                sublabel="Completed customer billings"
+                icon={<Receipt size={15} />}
+              />
+              <KpiCard
+                label="Estimated Gross Margin"
+                value={formatQar((stats?.todayRevenue || 0) * 0.45)}
+                sublabel="~45% Average retail optical margin"
+                tone="emerald"
+                icon={<TrendingUp size={15} />}
+                className="col-span-2 sm:col-span-1"
+              />
             </div>
 
             {/* Sales Period Performance Table with Export action */}
-            <div className="bg-white rounded-lg border border-stone-200 overflow-hidden flex flex-col shrink-0">
-              <div className="px-3.5 py-2.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+            <div className="bg-white rounded-xl border border-stone-200 overflow-hidden flex flex-col shrink-0">
+              <div className="px-3.5 py-2.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <TrendingUp size={14} className="text-stone-500" />
-                  <span className="text-xs font-semibold text-stone-900">Period-Grouped Sales & Profit Margins</span>
+                  <TrendingUp size={14} className="text-teal-700" />
+                  <span className="text-xs font-semibold text-stone-900">Period-Grouped Sales &amp; Profit Margins</span>
                 </div>
                 <button
                   onClick={handleExportCsv}
-                  className="px-2.5 py-1 rounded border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-50 transition flex items-center gap-1.5 cursor-pointer"
+                  className="min-h-[34px] px-3 rounded-lg border border-teal-200 bg-teal-50 text-teal-800 text-xs font-semibold hover:bg-teal-100 transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download size={12} />
                   <span>Export CSV</span>

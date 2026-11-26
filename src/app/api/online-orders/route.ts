@@ -78,7 +78,8 @@ export async function POST(req: NextRequest) {
       // 2. Fulfill shelf inventory for unallocated items
       const now = new Date();
       for (const item of order.items) {
-        if (!item.batchId && !item.isBackorder) {
+        const isUnallocated = !item.batchId || item.batchId === 'NON_BATCHED' || item.isBackorder;
+        if (isUnallocated) {
           const product = item.product;
           if (product && product.batches.length > 0) {
             // Find active matching batch (FEFO)
@@ -87,35 +88,69 @@ export async function POST(req: NextRequest) {
               .sort((a, b) => (a.expiryDate?.getTime() || 0) - (b.expiryDate?.getTime() || 0));
 
             let matchedBatch = null;
-            if (item.power !== null && item.power !== undefined) {
-              const itemPwrNum = Number(item.power);
-              matchedBatch = activeBatches.find(b => {
-                if (!b.power) return false;
-                const bNum = parseFloat(b.power.replace('+', ''));
-                return !isNaN(bNum) && Math.abs(bNum - itemPwrNum) < 0.001;
-              });
-            } else if (item.isPlano) {
-              matchedBatch = activeBatches.find(b => !b.power || b.power.includes('0.00') || b.power.toLowerCase().includes('plano'));
-            } else {
-              matchedBatch = activeBatches[0];
+            // 1. Check if an allocated batch was already assigned
+            if (item.allocatedBatchId) {
+              matchedBatch = activeBatches.find(b => b.id === item.allocatedBatchId) || null;
+            }
+
+            // 2. Match optical prescription (sphere, cylinder, axis)
+            if (!matchedBatch) {
+              if (item.power !== null && item.power !== undefined) {
+                const itemPwrNum = Number(item.power);
+                const itemCylNum = item.cylinder !== null && item.cylinder !== undefined ? Number(item.cylinder) : null;
+                const itemAxisNum = item.axis !== null && item.axis !== undefined ? Number(item.axis) : null;
+
+                matchedBatch = activeBatches.find(b => {
+                  if (!b.power) return false;
+                  const bNum = parseFloat(b.power.replace('+', ''));
+                  if (isNaN(bNum) || Math.abs(bNum - itemPwrNum) >= 0.001) return false;
+
+                  // Toric: match cylinder if present on item
+                  if (itemCylNum !== null) {
+                    if (!b.cylinder) return false;
+                    const bCyl = parseFloat(b.cylinder.replace('+', ''));
+                    if (isNaN(bCyl) || Math.abs(bCyl - itemCylNum) >= 0.001) return false;
+                  }
+
+                  // Toric: match axis if present on item
+                  if (itemAxisNum !== null) {
+                    if (b.axis === null || b.axis === undefined) return false;
+                    if (Number(b.axis) !== itemAxisNum) return false;
+                  }
+
+                  return true;
+                });
+              } else if (item.isPlano) {
+                matchedBatch = activeBatches.find(b => !b.power || b.power.includes('0.00') || b.power.toLowerCase().includes('plano'));
+              } else {
+                matchedBatch = activeBatches[0];
+              }
             }
 
             if (matchedBatch) {
               const newBatchQty = Math.max(0, matchedBatch.quantity - item.quantity);
               await prisma.productBatch.update({
                 where: { id: matchedBatch.id },
-                data: { quantity: newBatchQty, updatedAt: now },
+                data: {
+                  quantity: newBatchQty,
+                  status: newBatchQty === 0 ? 'DEPLETED' : 'ACTIVE',
+                  updatedAt: now,
+                },
               });
 
               await prisma.orderItem.update({
                 where: { id: item.id },
-                data: { batchId: matchedBatch.id, isBackorder: false },
+                data: {
+                  batchId: matchedBatch.id,
+                  allocatedBatchId: matchedBatch.id,
+                  isBackorder: false,
+                },
               });
 
               // Sync StoreStock & Product
               const newActiveSum = product.batches.reduce((sum, b) => {
                 if (b.id === matchedBatch.id) return sum + newBatchQty;
-                if ((!b.status || b.status === 'ACTIVE') && (!b.expiryDate || b.expiryDate >= now)) return sum + b.quantity;
+                if ((!b.status || b.status === 'ACTIVE') && (!b.expiryDate || b.expiryDate >= now) && b.id !== matchedBatch.id) return sum + b.quantity;
                 return sum;
               }, 0);
 
@@ -130,19 +165,28 @@ export async function POST(req: NextRequest) {
                 data: { stockQuantity: newActiveSum, updatedAt: now },
               });
 
-              await prisma.stockAdjustment.create({
-                data: {
-                  id: `ADJ-WEB-${Date.now()}-${item.id.slice(-4)}`,
+              // Prevent duplicate stock adjustments for the same order item
+              const existingAdj = await prisma.stockAdjustment.findFirst({
+                where: {
                   productId: product.id,
-                  storeId: 'STORE-MAIN',
-                  batchId: matchedBatch.id,
-                  systemQty: product.stockQuantity,
-                  countedQty: newActiveSum,
-                  deltaQty: -item.quantity,
-                  reason: 'ONLINE_DELIVERY',
-                  note: `Online Order ${order.orderNumber} delivered by ${operatorName || 'Staff'} (Qty: ${item.quantity})`,
+                  note: { contains: order.orderNumber },
                 },
               });
+              if (!existingAdj) {
+                await prisma.stockAdjustment.create({
+                  data: {
+                    id: `ADJ-WEB-${Date.now()}-${item.id.slice(-4)}`,
+                    productId: product.id,
+                    storeId: 'STORE-MAIN',
+                    batchId: matchedBatch.id,
+                    systemQty: product.stockQuantity,
+                    countedQty: newActiveSum,
+                    deltaQty: -item.quantity,
+                    reason: 'ONLINE_DELIVERY',
+                    note: `Online Order ${order.orderNumber} delivered by ${operatorName || 'Staff'} (Qty: ${item.quantity})`,
+                  },
+                });
+              }
             } else {
               // No matching batch on shelf (on-demand contact lens / special order)
               await prisma.orderItem.update({

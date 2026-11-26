@@ -6,8 +6,10 @@ import { formatQar, formatQatarDateTime } from '@/lib/utils';
 import { useSessionStore } from '@/stores/session-store';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
-import { Wallet, Plus, Loader2, X, Check } from 'lucide-react';
+import { Wallet, Plus, Loader2, Check, Receipt, Banknote } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 interface ExpenseItem {
   id: string;
@@ -91,7 +93,19 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    fetchExpenses();
+    let active = true;
+    fetch('/api/expenses')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.expenses) setExpenses(data.expenses);
+      })
+      .catch((err) => console.error('Error fetching expenses:', err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const totalExpense = expenses.reduce((sum, e) => sum + e.amountQar, 0);
@@ -189,12 +203,14 @@ export default function ExpensesPage() {
     {
       key: 'vendorName',
       header: 'Paid To',
+      priority: 'standard',
       className: 'w-32 text-stone-600 whitespace-nowrap',
       render: (exp) => <span className="truncate block text-xs">{exp.vendorName || '—'}</span>,
     },
     {
       key: 'receiptNumber',
       header: 'Receipt #',
+      priority: 'wide',
       className: 'w-28 font-mono text-stone-500 whitespace-nowrap',
       render: (exp) => <span className="truncate block text-xs">{exp.receiptNumber || '—'}</span>,
     },
@@ -216,47 +232,33 @@ export default function ExpensesPage() {
       subtitle="Track daily operating expenses, maintenance and cash drawer payouts"
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-3 sm:gap-4 overflow-hidden bg-stone-100/60">
-        {/* Typographic KPI Cards - strictly 1 line */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Total Recorded Expenses
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {formatQar(totalExpense)}
-            </div>
-            <span className="text-[11px] text-stone-500 mt-0.5 block truncate">
-              Store operating expenditures
-            </span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Expense Vouchers Logged
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {expenses.length} Records
-            </div>
-            <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-              All verified vouchers
-            </span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Cash Drawer Payouts
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {formatQar(
-                expenses
-                  .filter((e) => e.paymentSource === 'CASH_DRAWER')
-                  .reduce((sum, e) => sum + e.amountQar, 0)
-              )}
-            </div>
-            <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-              Shift register deductions
-            </span>
-          </div>
+        {/* KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+          <KpiCard
+            label="Total Recorded Expenses"
+            value={formatQar(totalExpense)}
+            sublabel="Store operating expenditures"
+            tone="rose"
+            icon={<Wallet size={15} />}
+            className="col-span-2 sm:col-span-1"
+          />
+          <KpiCard
+            label="Expense Vouchers Logged"
+            value={`${expenses.length} Records`}
+            sublabel="All verified vouchers"
+            tone="teal"
+            icon={<Receipt size={15} />}
+          />
+          <KpiCard
+            label="Cash Drawer Payouts"
+            value={formatQar(
+              expenses
+                .filter((e) => e.paymentSource === 'CASH_DRAWER')
+                .reduce((sum, e) => sum + e.amountQar, 0)
+            )}
+            sublabel="Shift register deductions"
+            icon={<Banknote size={15} />}
+          />
         </div>
 
         {/* Header with Category Filter, Search and Record Action */}
@@ -285,6 +287,7 @@ export default function ExpensesPage() {
             data={expenses}
             columns={columns}
             keyExtractor={(exp) => exp.id}
+            loading={loading}
             searchQuery={search}
             searchFields={[
               (exp) => exp.title,
@@ -325,136 +328,127 @@ export default function ExpensesPage() {
       </div>
 
       {/* New Expense Modal */}
-      {isNewModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-md overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <Wallet size={14} className="text-stone-500" />
-                <span>Record Store Expense (OPEX)</span>
-              </h3>
-              <button
-                onClick={() => setIsNewModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
+      <ResponsiveDialog
+        open={isNewModalOpen}
+        onClose={() => setIsNewModalOpen(false)}
+        maxWidthClass="sm:max-w-md"
+        icon={<Wallet size={16} className="text-teal-700" />}
+        title="Record Store Expense (OPEX)"
+        subtitle="Petty Cash & Operational Disbursement"
+        bodyClassName="p-4 sm:p-5"
+      >
+        <form onSubmit={handleCreate} className="space-y-3 text-xs">
+          {errorMessage && (
+            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono">
+              {errorMessage}
             </div>
+          )}
 
-            <form onSubmit={handleCreate} className="p-4 space-y-3 text-xs">
-              {errorMessage && (
-                <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">
-                  Expense Title / Purpose
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Tea & Pantry Supplies"
-                  className="w-full p-2 bg-stone-50 border border-stone-200 rounded text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1">
-                    Amount (QAR)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full p-2 bg-stone-50 border border-stone-200 rounded font-mono text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1">Payment Source</label>
-                  <SearchableSelect
-                    value={paymentSource}
-                    onChange={setPaymentSource}
-                    options={PAYMENT_SOURCE_OPTIONS}
-                    placeholder="Select payment source..."
-                    searchPlaceholder="Search source..."
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">Category</label>
-                <SearchableSelect
-                  value={category}
-                  onChange={setCategory}
-                  options={CATEGORY_OPTIONS}
-                  placeholder="Select category..."
-                  searchPlaceholder="Search category..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1">Vendor / Paid To</label>
-                  <input
-                    type="text"
-                    value={vendorName}
-                    onChange={(e) => setVendorName(e.target.value)}
-                    placeholder="Vendor Name"
-                    className="w-full p-2 bg-stone-50 border border-stone-200 rounded text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-stone-700 font-medium mb-1">Receipt #</label>
-                  <input
-                    type="text"
-                    value={receiptNumber}
-                    onChange={(e) => setReceiptNumber(e.target.value)}
-                    placeholder="Receipt #"
-                    className="w-full p-2 bg-stone-50 border border-stone-200 rounded font-mono text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">Notes</label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Additional remarks"
-                  className="w-full p-2 bg-stone-50 border border-stone-200 rounded text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-stone-200">
-                <button
-                  type="button"
-                  onClick={() => setIsNewModalOpen(false)}
-                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  <span>Save Expense</span>
-                </button>
-              </div>
-            </form>
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">
+              Expense Title / Purpose
+            </label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Tea & Pantry Supplies"
+              className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+            />
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-stone-700 font-medium mb-1">
+                Amount (QAR)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+              />
+            </div>
+            <div>
+              <label className="block text-stone-700 font-medium mb-1">Payment Source</label>
+              <SearchableSelect
+                value={paymentSource}
+                onChange={setPaymentSource}
+                options={PAYMENT_SOURCE_OPTIONS}
+                placeholder="Select payment source..."
+                searchPlaceholder="Search source..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">Category</label>
+            <SearchableSelect
+              value={category}
+              onChange={setCategory}
+              options={CATEGORY_OPTIONS}
+              placeholder="Select category..."
+              searchPlaceholder="Search category..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-stone-700 font-medium mb-1">Vendor / Paid To</label>
+              <input
+                type="text"
+                value={vendorName}
+                onChange={(e) => setVendorName(e.target.value)}
+                placeholder="Vendor Name"
+                className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+              />
+            </div>
+            <div>
+              <label className="block text-stone-700 font-medium mb-1">Receipt #</label>
+              <input
+                type="text"
+                value={receiptNumber}
+                onChange={(e) => setReceiptNumber(e.target.value)}
+                placeholder="Receipt #"
+                className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">Notes</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Additional remarks"
+              className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+            />
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-stone-200">
+            <button
+              type="button"
+              onClick={() => setIsNewModalOpen(false)}
+              className="min-h-[42px] px-4 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="min-h-[42px] px-4 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+            >
+              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              <span>Save Expense</span>
+            </button>
+          </div>
+        </form>
+      </ResponsiveDialog>
     </Shell>
   );
 }

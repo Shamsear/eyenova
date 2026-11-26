@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
           SupplierPurchaseItem: true,
         },
         orderBy: { receivedAt: 'desc' },
-        take: 100,
+        take: 2000,
       }),
       prisma.purchaseOrder.findMany({
         include: {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
           },
         },
         orderBy: { orderDate: 'desc' },
-        take: 100,
+        take: 2000,
       }),
       prisma.supplier.findMany({
         orderBy: { name: 'asc' },
@@ -203,6 +203,41 @@ export async function GET(req: NextRequest) {
   }
 }
 
+function mergeDuplicatePoItems(rawItems: any[]) {
+  if (!Array.isArray(rawItems)) return [];
+  const merged: any[] = [];
+  for (const it of rawItems) {
+    const pwr = it.power || null;
+    const cyl = it.cylinder || null;
+    const ax = it.axis ? parseInt(it.axis, 10) : null;
+    const existing = merged.find(
+      (m) =>
+        m.productId === it.productId &&
+        (m.power || null) === pwr &&
+        (m.cylinder || null) === cyl &&
+        (m.axis ?? null) === ax
+    );
+    if (existing) {
+      existing.quantity = parseInt(existing.quantity || '0', 10) + parseInt(it.quantity || '1', 10);
+      existing.receivedQuantity = parseInt(existing.receivedQuantity || '0', 10) + parseInt(it.receivedQuantity || '0', 10);
+      existing.unitCostQar = Number(it.unitCostQar || existing.unitCostQar || 0);
+      existing.totalCostQar = existing.quantity * existing.unitCostQar;
+    } else {
+      merged.push({
+        ...it,
+        quantity: parseInt(it.quantity || '1', 10),
+        receivedQuantity: parseInt(it.receivedQuantity || '0', 10),
+        unitCostQar: Number(it.unitCostQar || 0),
+        totalCostQar: parseInt(it.quantity || '1', 10) * Number(it.unitCostQar || 0),
+        power: pwr,
+        cylinder: cyl,
+        axis: ax,
+      });
+    }
+  }
+  return merged;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -233,7 +268,8 @@ export async function POST(req: NextRequest) {
         finalPoNumber = `PO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
       }
 
-      const totalCost = items.reduce(
+      const mergedItems = mergeDuplicatePoItems(items);
+      const totalCost = mergedItems.reduce(
         (sum: number, it: any) => sum + Number(it.quantity || 1) * Number(it.unitCostQar || 0),
         0
       );
@@ -254,7 +290,7 @@ export async function POST(req: NextRequest) {
           notes: notes || null,
           createdByName: createdByName || 'Staff Cashier',
           PurchaseOrderItem: {
-            create: items.map((it: any) => ({
+            create: mergedItems.map((it: any) => ({
               id: `POI-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               productId: it.productId,
               power: it.power || null,
@@ -343,7 +379,7 @@ export async function POST(req: NextRequest) {
 
         // Register batch in ProductBatch table and sync StoreStock & Product
         try {
-          await prisma.productBatch.create({
+          const newBatch = await prisma.productBatch.create({
             data: {
               id: `PB-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               productId: item.productId,
@@ -357,7 +393,98 @@ export async function POST(req: NextRequest) {
               axis: item.axis ?? null,
             },
           });
-          const allBatches = await prisma.productBatch.findMany({ where: { productId: item.productId } });
+
+          // Check for open/unfulfilled customer orders waiting for this lens specification
+          let remainingBatchQty = qty;
+          const openOrders = await prisma.order.findMany({
+            where: {
+              orderStatus: { in: ['CONFIRMED', 'ORDER_PLACED', 'PROCESSING', 'PENDING', 'AWAITING_STOCK'] },
+              items: {
+                some: {
+                  productId: item.productId,
+                  OR: [
+                    { batchId: null },
+                    { batchId: '' },
+                    { batchId: 'NON_BATCHED' },
+                    { isBackorder: true },
+                  ],
+                },
+              },
+            },
+            include: {
+              items: {
+                where: {
+                  productId: item.productId,
+                  OR: [
+                    { batchId: null },
+                    { batchId: '' },
+                    { batchId: 'NON_BATCHED' },
+                    { isBackorder: true },
+                  ],
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          for (const ord of openOrders) {
+            if (remainingBatchQty <= 0) break;
+            for (const oItem of ord.items) {
+              if (remainingBatchQty <= 0) break;
+              // Check optical match
+              let isMatch = true;
+              if (item.power !== null && item.power !== undefined) {
+                const itemPwr = parseFloat(String(item.power).replace('+', ''));
+                const oPwr = oItem.power !== null && oItem.power !== undefined ? Number(oItem.power) : null;
+                if (oPwr === null || isNaN(itemPwr) || Math.abs(itemPwr - oPwr) >= 0.001) isMatch = false;
+              }
+              if (isMatch && item.cylinder !== null && item.cylinder !== undefined) {
+                const itemCyl = parseFloat(String(item.cylinder).replace('+', ''));
+                const oCyl = oItem.cylinder !== null && oItem.cylinder !== undefined ? Number(oItem.cylinder) : null;
+                if (oCyl === null || isNaN(itemCyl) || Math.abs(itemCyl - oCyl) >= 0.001) isMatch = false;
+              }
+              if (isMatch && item.axis !== null && item.axis !== undefined) {
+                if (oItem.axis === null || oItem.axis === undefined || Number(oItem.axis) !== Number(item.axis)) isMatch = false;
+              }
+
+              if (isMatch) {
+                // Auto-allocate this batch to the waiting customer order
+                await prisma.orderItem.update({
+                  where: { id: oItem.id },
+                  data: {
+                    batchId: newBatch.id,
+                    allocatedBatchId: newBatch.id,
+                    isBackorder: false,
+                    costPriceQar: item.unitCostQar,
+                    grossProfitQar: Number(oItem.totalPriceQar) - (Number(item.unitCostQar) * oItem.quantity),
+                  },
+                });
+
+                // Deduct from shelf batch so walk-ins don't see or buy it
+                const allocatedQty = Math.min(remainingBatchQty, oItem.quantity);
+                remainingBatchQty -= allocatedQty;
+              }
+            }
+          }
+
+          if (remainingBatchQty !== qty) {
+            await prisma.productBatch.update({
+              where: { id: newBatch.id },
+              data: {
+                quantity: remainingBatchQty,
+                status: remainingBatchQty === 0 ? 'DEPLETED' : 'ACTIVE',
+                updatedAt: new Date(),
+              },
+            });
+          }
+
+          const allBatches = await prisma.productBatch.findMany({
+            where: {
+              productId: item.productId,
+              status: 'ACTIVE',
+              quantity: { gt: 0 },
+            },
+          });
           const totalStock = allBatches.reduce((s, b) => s + (b.quantity || 0), 0);
           await prisma.product.update({ where: { id: item.productId }, data: { stockQuantity: totalStock } });
           await prisma.storeStock.updateMany({ where: { productId: item.productId }, data: { stockQuantity: totalStock } });
@@ -582,13 +709,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Purchase Order ID is required.' }, { status: 400 });
       }
 
-      const totalCost = (items || []).reduce(
+      const mergedItems = items && Array.isArray(items) ? mergeDuplicatePoItems(items) : null;
+      const totalCost = (mergedItems || []).reduce(
         (sum: number, it: any) => sum + Number(it.quantity || 1) * Number(it.unitCostQar || 0),
         0
       );
 
       // Recreate line items if updated items list is provided
-      if (items && Array.isArray(items)) {
+      if (mergedItems) {
         await prisma.purchaseOrderItem.deleteMany({
           where: { purchaseOrderId: poId },
         });
@@ -603,14 +731,14 @@ export async function POST(req: NextRequest) {
           orderDate: orderDate ? new Date(orderDate) : undefined,
           expectedDeliveryDate: expectedDeliveryDate ? new Date(expectedDeliveryDate) : null,
           receivingStatus: receivingStatus || undefined,
-          subtotalQar: items ? totalCost : undefined,
-          totalAmountQar: items ? totalCost : undefined,
+          subtotalQar: mergedItems ? totalCost : undefined,
+          totalAmountQar: mergedItems ? totalCost : undefined,
           notes: notes !== undefined ? (notes?.trim() || null) : undefined,
           updatedAt: new Date(),
-          ...(items && Array.isArray(items)
+          ...(mergedItems
             ? {
                 PurchaseOrderItem: {
-                  create: items.map((it: any) => ({
+                  create: mergedItems.map((it: any) => ({
                     id: `POI-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                     productId: it.productId,
                     power: it.power || null,
@@ -669,6 +797,24 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Shipment ID is required.' }, { status: 400 });
       }
 
+      const existingShipment = await prisma.supplierPurchase.findUnique({
+        where: { id: shipmentId },
+        select: { notes: true },
+      });
+
+      if (!existingShipment) {
+        return NextResponse.json({ error: 'Shipment not found.' }, { status: 404 });
+      }
+
+      let finalNotes = notes !== undefined ? (notes?.trim() || null) : undefined;
+      // Preserve "Received against PO ..." tag if existing notes had it and new notes does not include it
+      if (finalNotes !== undefined && existingShipment.notes && existingShipment.notes.includes('Received against PO')) {
+        const poTagMatch = existingShipment.notes.match(/Received against PO\s+([A-Za-z0-9\-_]+)/i);
+        if (poTagMatch && (!finalNotes || !finalNotes.includes(poTagMatch[0]))) {
+          finalNotes = finalNotes ? `${finalNotes} | ${poTagMatch[0]}` : poTagMatch[0];
+        }
+      }
+
       const updated = await prisma.supplierPurchase.update({
         where: { id: shipmentId },
         data: {
@@ -676,7 +822,7 @@ export async function POST(req: NextRequest) {
           receivedAt: receivedAt ? new Date(receivedAt) : undefined,
           deliveredByName: deliveredByName !== undefined ? (deliveredByName?.trim() || null) : undefined,
           supplierRepContact: supplierRepContact !== undefined ? (supplierRepContact?.trim() || null) : undefined,
-          notes: notes !== undefined ? (notes?.trim() || null) : undefined,
+          notes: finalNotes,
         },
       });
 

@@ -16,6 +16,7 @@ interface SessionState {
   shift: ShiftInfo | null;
   isSidebarCollapsed: boolean;
   isMobileMenuOpen: boolean;
+  isCommandPaletteOpen: boolean;
   isFullscreen: boolean;
 
   // Actions
@@ -29,6 +30,8 @@ interface SessionState {
   toggleSidebar: () => void;
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
+  setCommandPaletteOpen: (open: boolean) => void;
+  toggleCommandPalette: () => void;
   setFullscreen: (isFullscreen: boolean) => void;
   toggleFullscreen: () => void;
 
@@ -62,6 +65,7 @@ export const useSessionStore = create<SessionState>()(
       shift: null,
       isSidebarCollapsed: false,
       isMobileMenuOpen: false,
+      isCommandPaletteOpen: false,
       isFullscreen: false,
 
       login: (user, store) =>
@@ -95,10 +99,20 @@ export const useSessionStore = create<SessionState>()(
       toggleSidebar: () => set((state) => ({ isSidebarCollapsed: !state.isSidebarCollapsed })),
       setMobileMenuOpen: (open) => set({ isMobileMenuOpen: open }),
       toggleMobileMenu: () => set((state) => ({ isMobileMenuOpen: !state.isMobileMenuOpen })),
+      setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+      toggleCommandPalette: () =>
+        set((state) => ({ isCommandPaletteOpen: !state.isCommandPaletteOpen })),
       setFullscreen: (val: boolean) => set({ isFullscreen: val }),
       toggleFullscreen: async () => {
         if (typeof window === 'undefined') return;
-        const doc = document as any;
+        const doc = document as Document & {
+          webkitFullscreenElement?: Element;
+          mozFullScreenElement?: Element;
+          msFullscreenElement?: Element;
+          webkitExitFullscreen?: () => Promise<void>;
+          mozCancelFullScreen?: () => Promise<void>;
+          msExitFullscreen?: () => Promise<void>;
+        };
         const isCurrentlyFs = !!(
           doc.fullscreenElement ||
           doc.webkitFullscreenElement ||
@@ -108,7 +122,11 @@ export const useSessionStore = create<SessionState>()(
 
         try {
           if (!isCurrentlyFs) {
-            const el = document.documentElement as any;
+            const el = document.documentElement as HTMLElement & {
+              webkitRequestFullscreen?: () => Promise<void>;
+              mozRequestFullScreen?: () => Promise<void>;
+              msRequestFullscreen?: () => Promise<void>;
+            };
             if (el.requestFullscreen) {
               await el.requestFullscreen();
             } else if (el.webkitRequestFullscreen) {
@@ -170,24 +188,25 @@ export const useSessionStore = create<SessionState>()(
         shift: state.shift,
         isSidebarCollapsed: state.isSidebarCollapsed,
       }),
-      migrate: (persistedState: any) => {
-        if (persistedState) {
+      migrate: (persistedState: unknown) => {
+        const stateObj = persistedState as Partial<SessionState> | undefined;
+        if (stateObj) {
           if (
-            persistedState.user?.id === 'USR-STAFF' ||
-            persistedState.user?.username === 'staff' ||
-            persistedState.user?.fullName?.includes('Sarah')
+            stateObj.user?.id === 'USR-STAFF' ||
+            stateObj.user?.username === 'staff' ||
+            stateObj.user?.fullName?.includes('Sarah')
           ) {
-            persistedState.user = null;
-            persistedState.isLoggedIn = false;
-            persistedState.isStationLocked = true;
+            stateObj.user = null;
+            stateObj.isLoggedIn = false;
+            stateObj.isStationLocked = true;
           }
-          if (persistedState.shift) {
-            if (persistedState.shift.id === 'SHIFT-AUTO' || persistedState.shift.openingCash === 500) {
-              persistedState.shift = null;
+          if (stateObj.shift) {
+            if (stateObj.shift.id === 'SHIFT-AUTO' || stateObj.shift.openingCash === 500) {
+              stateObj.shift = null;
             }
           }
         }
-        return persistedState;
+        return stateObj as SessionState;
       },
       onRehydrateStorage: () => (state) => {
         if (

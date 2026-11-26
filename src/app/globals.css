@@ -6,10 +6,13 @@
   --card: #ffffff;
   --card-foreground: #1c1917;
   --muted: #f5f5f4; /* stone-100 */
-  --muted-foreground: #78716c; /* stone-500 */
+  --muted-foreground: #57534e; /* stone-600 for >= 4.5:1 contrast */
   --border: #e7e5e4; /* stone-200 */
   --border-subtle: #f5f5f4; /* stone-100 */
   --accent: #0f766e; /* precision teal */
+  --accent-hover: #115e59; /* teal-800 */
+  --accent-soft: #f0fdfa; /* teal-50 */
+  --accent-border: #99f6e4; /* teal-200 */
   --accent-foreground: #ffffff;
   --primary: #1c1917; /* stone-900 */
   --primary-foreground: #fafaf9;
@@ -133,8 +136,23 @@ code, kbd, samp, pre, .font-mono {
 
 /* Selection */
 ::selection {
-  background-color: #e7e5e4;
-  color: #1c1917;
+  background-color: #ccfbf1;
+  color: #134e4a;
+}
+
+/* Caret & keyboard focus ring consistency */
+input, textarea, select {
+  caret-color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.45);
+  outline-offset: 1px;
+}
+
+/* Safe-area bottom padding helper for mobile sheets & bottom nav */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Print styling for 80mm thermal receipts */

@@ -5,7 +5,9 @@ import { Shell } from '@/components/layout/shell';
 import { formatQar } from '@/lib/utils';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
-import { Landmark, Plus, X, Check, Loader2 } from 'lucide-react';
+import { Landmark, Plus, Check, Loader2, Banknote, Building2 } from 'lucide-react';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 interface AuditMovement {
   id: string;
@@ -61,7 +63,26 @@ export default function TreasuryPage() {
   };
 
   useEffect(() => {
-    loadTreasury();
+    let active = true;
+    fetch('/api/treasury')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.treasury) {
+          setCashBalance(data.treasury.cashBalanceQar || 0);
+          setBankBalance(data.treasury.bankBalanceQar || 0);
+        }
+        if (data.movements) {
+          setAuditLog(data.movements);
+        }
+      })
+      .catch((err) => console.error('Failed to load treasury:', err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const totalLiquid = cashBalance + bankBalance;
@@ -145,12 +166,14 @@ export default function TreasuryPage() {
     {
       key: 'operator',
       header: 'Operator',
+      priority: 'standard',
       className: 'w-32 text-stone-700 whitespace-nowrap',
       render: (m) => <span className="truncate block text-xs">{m.operator}</span>,
     },
     {
       key: 'notes',
       header: 'Notes / Reference',
+      priority: 'wide',
       className: 'text-stone-500',
       render: (m) => <span className="truncate block text-xs">{m.notes || '—'}</span>,
     },
@@ -162,43 +185,29 @@ export default function TreasuryPage() {
       subtitle="Liquid assets, cash drawer safe balance and double-entry movement log"
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-5 gap-3 sm:gap-4 overflow-hidden bg-stone-100/60">
-        {/* Balances Typographic Grid - strictly 1 line */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Total Liquid Treasury
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {formatQar(totalLiquid)}
-            </div>
-            <span className="text-[11px] text-stone-500 mt-0.5 block truncate">
-              Consolidated Cash + Bank
-            </span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Physical Safe & Cash Drawers
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {formatQar(cashBalance)}
-            </div>
-            <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-              Store float & register cash
-            </span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-lg border border-stone-200">
-            <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block truncate">
-              Bank Settlement
-            </span>
-            <div className="text-xl font-mono font-semibold text-stone-900 mt-1 tabular-nums truncate">
-              {formatQar(bankBalance)}
-            </div>
-            <span className="text-[11px] font-mono text-stone-500 mt-0.5 block truncate">
-              Card & terminal settlements
-            </span>
-          </div>
+        {/* Balances KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+          <KpiCard
+            label="Total Liquid Treasury"
+            value={formatQar(totalLiquid)}
+            sublabel="Consolidated Cash + Bank"
+            tone="teal"
+            icon={<Landmark size={15} />}
+            className="col-span-2 sm:col-span-1"
+          />
+          <KpiCard
+            label="Physical Cash Drawers"
+            value={formatQar(cashBalance)}
+            sublabel="Store float & register cash"
+            icon={<Banknote size={15} />}
+          />
+          <KpiCard
+            label="Bank Settlement"
+            value={formatQar(bankBalance)}
+            sublabel="Card & terminal settlements"
+            tone="emerald"
+            icon={<Building2 size={15} />}
+          />
         </div>
 
         {/* Page Header with Channel Filter, Search and Add Action */}
@@ -227,6 +236,7 @@ export default function TreasuryPage() {
             data={auditLog}
             columns={columns}
             keyExtractor={(m) => m.id}
+            loading={loading}
             searchQuery={search}
             searchFields={[
               (m) => m.operator,
@@ -267,108 +277,99 @@ export default function TreasuryPage() {
       </div>
 
       {/* Vault Drop Modal */}
-      {isDropModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-md overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <Landmark size={14} className="text-stone-500" />
-                <span>Record Store Vault Safe Drop</span>
-              </h3>
+      <ResponsiveDialog
+        open={isDropModalOpen}
+        onClose={() => setIsDropModalOpen(false)}
+        maxWidthClass="sm:max-w-md"
+        icon={<Landmark size={16} className="text-teal-700" />}
+        title="Record Store Vault Safe Drop"
+        subtitle="Treasury Cash & Bank Allocation"
+        bodyClassName="p-4 sm:p-5"
+      >
+        <form onSubmit={handleVaultDrop} className="space-y-3.5 text-xs">
+          {errorMessage && (
+            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-mono">
+              {errorMessage}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">
+              Destination Channel
+            </label>
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => setIsDropModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
+                type="button"
+                onClick={() => setDropChannel('CASH')}
+                className={`min-h-[40px] py-2 px-3 rounded-lg border text-xs font-mono font-semibold transition cursor-pointer ${
+                  dropChannel === 'CASH'
+                    ? 'bg-teal-700 text-white border-teal-700 shadow-2xs'
+                    : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                }`}
               >
-                <X size={15} />
+                Physical Cash Safe
+              </button>
+              <button
+                type="button"
+                onClick={() => setDropChannel('BANK')}
+                className={`min-h-[40px] py-2 px-3 rounded-lg border text-xs font-mono font-semibold transition cursor-pointer ${
+                  dropChannel === 'BANK'
+                    ? 'bg-teal-700 text-white border-teal-700 shadow-2xs'
+                    : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                }`}
+              >
+                Bank Settlement
               </button>
             </div>
-
-            <form onSubmit={handleVaultDrop} className="p-4 space-y-3 text-xs">
-              {errorMessage && (
-                <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">
-                  Destination Channel
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDropChannel('CASH')}
-                    className={`py-1.5 px-3 rounded border text-xs font-mono font-medium transition cursor-pointer ${
-                      dropChannel === 'CASH'
-                        ? 'bg-stone-900 text-stone-50 border-stone-900'
-                        : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
-                    }`}
-                  >
-                    Physical Cash Safe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDropChannel('BANK')}
-                    className={`py-1.5 px-3 rounded border text-xs font-mono font-medium transition cursor-pointer ${
-                      dropChannel === 'BANK'
-                        ? 'bg-stone-900 text-stone-50 border-stone-900'
-                        : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
-                    }`}
-                  >
-                    Bank Settlement
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">
-                  Amount (QAR)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={dropAmount}
-                  onChange={(e) => setDropAmount(e.target.value)}
-                  placeholder="500.00"
-                  className="w-full p-2 bg-stone-50 border border-stone-200 rounded font-mono text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-700 font-medium mb-1">
-                  Reference / Reason
-                </label>
-                <input
-                  type="text"
-                  value={dropNotes}
-                  onChange={(e) => setDropNotes(e.target.value)}
-                  placeholder="e.g. End-of-shift register skim into vault"
-                  className="w-full p-2 bg-stone-50 border border-stone-200 rounded text-xs focus:bg-white focus:outline-none focus:border-stone-900"
-                />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2 border-t border-stone-200">
-                <button
-                  type="button"
-                  onClick={() => setIsDropModalOpen(false)}
-                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                  <span>Log Movement</span>
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">
+              Amount (QAR)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              required
+              value={dropAmount}
+              onChange={(e) => setDropAmount(e.target.value)}
+              placeholder="500.00"
+              className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-stone-700 font-medium mb-1">
+              Reference / Reason
+            </label>
+            <input
+              type="text"
+              value={dropNotes}
+              onChange={(e) => setDropNotes(e.target.value)}
+              placeholder="e.g. End-of-shift register skim into vault"
+              className="w-full min-h-[40px] px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-[16px] sm:text-xs focus:bg-white focus:outline-none focus:border-teal-600"
+            />
+          </div>
+
+          <div className="pt-3 flex justify-end gap-2 border-t border-stone-200">
+            <button
+              type="button"
+              onClick={() => setIsDropModalOpen(false)}
+              className="min-h-[42px] px-4 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="min-h-[42px] px-4 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+            >
+              {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              <span>Log Movement</span>
+            </button>
+          </div>
+        </form>
+      </ResponsiveDialog>
     </Shell>
   );
 }

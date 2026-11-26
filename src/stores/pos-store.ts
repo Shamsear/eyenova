@@ -27,6 +27,7 @@ interface PosState {
 
   // Active Modals
   isPaymentModalOpen: boolean;
+  preferredPaymentMethod: 'CASH' | 'CARD' | 'SPLIT' | 'STORE_CREDIT' | null;
   isLensConfigModalOpen: boolean;
   selectedProductForConfig: ProductItem | null;
   isCustomerModalOpen: boolean;
@@ -61,7 +62,10 @@ interface PosState {
   removeHeldSale: (id: string) => void;
 
   // Modal toggles
-  setPaymentModalOpen: (open: boolean) => void;
+  setPaymentModalOpen: (
+    open: boolean,
+    preferredMethod?: 'CASH' | 'CARD' | 'SPLIT' | 'STORE_CREDIT' | null
+  ) => void;
   setLensConfigModalOpen: (open: boolean, product?: ProductItem | null) => void;
   setCustomerModalOpen: (open: boolean) => void;
   setHeldSalesModalOpen: (open: boolean) => void;
@@ -210,6 +214,7 @@ export const usePosStore = create<PosState>()(
       heldSales: [],
 
       isPaymentModalOpen: false,
+      preferredPaymentMethod: null,
       isLensConfigModalOpen: false,
       selectedProductForConfig: null,
       isCustomerModalOpen: false,
@@ -451,7 +456,7 @@ export const usePosStore = create<PosState>()(
         const newLineId = `line_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const newPrice = (targetLine.powerPriceTiers && targetLine.powerPriceTiers.length > 0)
           ? getEffectivePriceForPower(
-              { ...targetLine, id: targetLine.productId, basePriceQar: targetLine.basePriceQar ?? targetLine.unitPrice } as any,
+              { ...targetLine, id: targetLine.productId, basePriceQar: targetLine.basePriceQar ?? targetLine.unitPrice } as unknown as ProductItem,
               chosenPlano ? '0.00' : chosenPower,
               targetLine.cylinder,
               targetLine.addPower
@@ -579,7 +584,7 @@ export const usePosStore = create<PosState>()(
                 basePriceQar: updated.basePriceQar ?? updated.unitPrice,
                 salePriceQar: updated.basePriceQar ?? updated.unitPrice,
                 powerPriceTiers: updated.powerPriceTiers,
-              } as any,
+              } as unknown as ProductItem,
               updated.isPlano ? '0.00' : updated.power,
               updated.cylinder,
               updated.addPower
@@ -768,7 +773,11 @@ export const usePosStore = create<PosState>()(
           heldSales: state.heldSales.filter((s) => s.id !== id),
         })),
 
-      setPaymentModalOpen: (open) => set({ isPaymentModalOpen: open }),
+      setPaymentModalOpen: (open, preferredMethod = null) =>
+        set({
+          isPaymentModalOpen: open,
+          preferredPaymentMethod: open ? preferredMethod : null,
+        }),
       setLensConfigModalOpen: (open, product = null) =>
         set({ isLensConfigModalOpen: open, selectedProductForConfig: product }),
       setCustomerModalOpen: (open) => set({ isCustomerModalOpen: open }),

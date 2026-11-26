@@ -1,19 +1,21 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { usePosStore } from '@/stores/pos-store';
 import { formatQar } from '@/lib/utils';
 import { Eye, ShoppingBag } from 'lucide-react';
+
+const emptySubscribe = () => () => {};
 
 export default function CustomerDisplayPage() {
   const { lines, customerName, getSubtotal, getDiscountTotal, getGrandTotal } =
     usePosStore();
 
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   if (!mounted) return null;
 
@@ -64,20 +66,20 @@ export default function CustomerDisplayPage() {
           <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
             {lines.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-stone-500 gap-2">
-                <Eye size={36} className="text-stone-700 animate-pulse" />
-                <p className="text-sm font-medium text-stone-400">Ready for your optical order</p>
-                <p className="text-xs font-mono text-stone-600">Selected lenses and frames will appear here.</p>
+                <Eye size={36} className="text-teal-700 animate-pulse" />
+                <p className="text-sm font-medium text-stone-300">Ready for your optical order</p>
+                <p className="text-xs font-mono text-stone-500">Selected lenses and frames will appear here.</p>
               </div>
             ) : (
               lines.map((line) => (
                 <div
                   key={line.lineId}
-                  className="bg-stone-900 border border-stone-800 p-2.5 rounded flex items-center justify-between gap-3"
+                  className="bg-stone-900 border border-stone-800 p-3 rounded-lg flex items-center justify-between gap-3"
                 >
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-xs sm:text-sm text-stone-100 truncate">{line.titleEn}</h3>
                     {line.lensSummary && line.lensSummary !== 'Standard' && (
-                      <p className="text-[11px] font-mono text-stone-400 truncate mt-0.5">{line.lensSummary}</p>
+                      <p className="text-[11px] font-mono text-teal-400 truncate mt-0.5">{line.lensSummary}</p>
                     )}
                     <span className="text-[11px] text-stone-500 font-mono tabular-nums truncate block">
                       {formatQar(line.unitPrice)} each
@@ -85,7 +87,7 @@ export default function CustomerDisplayPage() {
                   </div>
 
                   <div className="text-right shrink-0 font-mono">
-                    <span className="text-xs text-stone-400 block tabular-nums">Qty: {line.quantity}</span>
+                    <span className="text-xs text-teal-300 block tabular-nums">Qty: {line.quantity}</span>
                     <span className="text-sm sm:text-base font-semibold text-stone-100 block tabular-nums">
                       {formatQar(line.unitPrice * line.quantity)}
                     </span>
@@ -118,11 +120,11 @@ export default function CustomerDisplayPage() {
           </div>
 
           {/* Grand Total Box */}
-          <div className="bg-stone-900 border border-stone-700 text-stone-50 rounded-lg p-4 text-center my-3">
-            <span className="text-[10px] font-mono font-medium uppercase tracking-wider text-stone-400 block mb-1">
+          <div className="bg-teal-950/60 border border-teal-700/70 text-stone-50 rounded-xl p-4 text-center my-3">
+            <span className="text-[10px] font-mono font-medium uppercase tracking-wider text-teal-300 block mb-1">
               Total Amount Payable
             </span>
-            <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight tabular-nums block">
+            <span className="text-2xl sm:text-3xl font-mono font-bold tracking-tight tabular-nums block text-white">
               {formatQar(grandTotal)}
             </span>
           </div>

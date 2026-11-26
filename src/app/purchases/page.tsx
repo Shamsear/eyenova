@@ -16,6 +16,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { PageHeader } from '@/components/shared/page-header';
 import { SearchableSelect, SelectOption } from '@/components/shared/searchable-select';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 import {
   Truck,
   Plus,
@@ -23,7 +24,6 @@ import {
   Building2,
   RotateCcw,
   Eye,
-  X,
   Check,
   Calendar,
   DollarSign,
@@ -540,7 +540,31 @@ export default function PurchasesPage() {
   };
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    Promise.all([
+      fetch(`/api/purchases?q=${encodeURIComponent(search.trim())}`),
+      fetch('/api/products?limit=500'),
+    ])
+      .then(([purchasesRes, productsRes]) =>
+        Promise.all([purchasesRes.json(), productsRes.json()])
+      )
+      .then(([pData, prodData]) => {
+        if (!active) return;
+        if (pData.shipments) setShipments(pData.shipments);
+        if (pData.orders) setOrders(pData.orders);
+        if (pData.suppliers) setSuppliers(pData.suppliers);
+        if (pData.lowStock) setLowStock(pData.lowStock);
+        if (prodData.products) setCatalogProducts(prodData.products);
+      })
+      .catch((err) => {
+        console.error('Error fetching purchases data:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [search]);
 
   // Add Item to Draft PO
@@ -558,21 +582,44 @@ export default function PurchasesPage() {
     const cyl = isSelectedPoOptical && itemCylinder ? itemCylinder : null;
     const ax = isSelectedPoOptical && itemAxis ? parseInt(itemAxis, 10) : null;
 
-    setDraftItems((prev) => [
-      ...prev,
-      {
-        productId: selectedPoProduct.id,
-        productTitle: selectedPoProduct.titleEn,
-        brandName: selectedPoProduct.brandName || 'EyeNova',
-        sku: selectedPoProduct.sku,
-        quantity: qty,
-        unitCostQar: cost,
-        totalCostQar: qty * cost,
-        power: pwr,
-        cylinder: cyl,
-        axis: ax,
-      },
-    ]);
+    setDraftItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (i) =>
+          i.productId === selectedPoProduct.id &&
+          (i.power || 'Plano (0.00)') === (pwr || 'Plano (0.00)') &&
+          (i.cylinder || null) === cyl &&
+          (i.axis ?? null) === ax
+      );
+
+      if (existingIdx >= 0) {
+        const updated = [...prev];
+        const existing = updated[existingIdx];
+        const newQty = existing.quantity + qty;
+        updated[existingIdx] = {
+          ...existing,
+          quantity: newQty,
+          unitCostQar: cost,
+          totalCostQar: newQty * cost,
+        };
+        return updated;
+      }
+
+      return [
+        ...prev,
+        {
+          productId: selectedPoProduct.id,
+          productTitle: selectedPoProduct.titleEn,
+          brandName: selectedPoProduct.brandName || 'EyeNova',
+          sku: selectedPoProduct.sku,
+          quantity: qty,
+          unitCostQar: cost,
+          totalCostQar: qty * cost,
+          power: pwr,
+          cylinder: cyl,
+          axis: ax,
+        },
+      ];
+    });
 
     setItemProductId('');
     setItemPower('0.00');
@@ -641,7 +688,7 @@ export default function PurchasesPage() {
     setFormError('');
 
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         action: editingPoId ? 'UPDATE_PO' : 'CREATE_PO',
         supplierId: poSupplierId,
         expectedDeliveryDate: poExpectedDelivery || undefined,
@@ -898,7 +945,7 @@ export default function PurchasesPage() {
     setFormError('');
 
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         action: editingSupplierId ? 'UPDATE_SUPPLIER' : 'CREATE_SUPPLIER',
         name: vName,
         contactPerson: vContact,
@@ -1197,14 +1244,21 @@ export default function PurchasesPage() {
         <button
           onClick={() => {
             setIsCreatePoOpen(true);
-            const matchedSup = suppliers.find((s) => isProductAssociatedWithSupplier(item as any, s));
+            const productProxy: CatalogProduct = {
+              id: item.id,
+              titleEn: item.titleEn || item.title || '',
+              brandName: item.brandName ?? item.brand ?? null,
+              sku: item.sku,
+              retailPrice: 0,
+            };
+            const matchedSup = suppliers.find((s) => isProductAssociatedWithSupplier(productProxy, s));
             if (matchedSup) {
               setPoSupplierId(matchedSup.id);
             }
             setItemProductId(item.id);
             setItemQty(String(item.suggestedReorder));
           }}
-          className="px-2 py-0.5 rounded bg-stone-900 text-stone-50 text-[10px] font-mono hover:bg-stone-800 transition cursor-pointer"
+          className="min-h-[34px] px-2.5 py-1 rounded-md bg-teal-700 hover:bg-teal-800 text-white text-[11px] font-mono font-medium transition cursor-pointer"
         >
           Add to PO
         </button>
@@ -1319,10 +1373,10 @@ export default function PurchasesPage() {
             {TABS.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setActiveTab(t.id as any)}
-                className={`px-3 py-1.5 rounded text-xs font-mono font-medium transition cursor-pointer whitespace-nowrap shrink-0 ${
+                onClick={() => setActiveTab(t.id as 'SHIPMENTS' | 'ORDERS' | 'REORDER' | 'SUPPLIERS')}
+                className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
                   activeTab === t.id
-                    ? 'bg-stone-900 text-stone-50'
+                    ? 'bg-teal-700 text-white shadow-2xs'
                     : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                 }`}
               >
@@ -1338,7 +1392,7 @@ export default function PurchasesPage() {
                 setFormError('');
                 setIsDirectInboundOpen(true);
               }}
-              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <Truck size={13} />
               <span>Direct Inbound</span>
@@ -1349,7 +1403,7 @@ export default function PurchasesPage() {
                 setFormError('');
                 setIsReceivePoOpen(true);
               }}
-              className="px-3 py-1.5 rounded border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
               <PackageCheck size={13} />
               <span>Receive PO</span>
@@ -1360,7 +1414,7 @@ export default function PurchasesPage() {
                 setFormError('');
                 setIsCreatePoOpen(true);
               }}
-              className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
+              className="min-h-[38px] px-3.5 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs"
             >
               <Plus size={13} />
               <span>New Purchase Order</span>
@@ -1375,6 +1429,7 @@ export default function PurchasesPage() {
               data={shipments}
               columns={shipmentColumns}
               keyExtractor={(s) => s.id}
+              loading={loading}
               searchQuery={search}
               searchFields={[
                 (s) => s.invoiceNumber,
@@ -1444,6 +1499,7 @@ export default function PurchasesPage() {
               data={orders}
               columns={orderColumns}
               keyExtractor={(o) => o.id}
+              loading={loading}
               searchQuery={search}
               searchFields={[
                 (o) => o.poNumber,
@@ -1476,7 +1532,7 @@ export default function PurchasesPage() {
                       {o.receivingStatus !== 'FULLY_RECEIVED' && (
                         <button
                           onClick={() => openReceiveForPo(o)}
-                          className="px-1.5 py-0.5 rounded bg-stone-900 text-stone-50 text-[10px] font-mono hover:bg-stone-800 transition cursor-pointer"
+                          className="min-h-[34px] px-2.5 py-1 rounded-md bg-teal-700 text-white text-[11px] font-mono font-medium hover:bg-teal-800 transition cursor-pointer"
                         >
                           Receive
                         </button>
@@ -1519,6 +1575,7 @@ export default function PurchasesPage() {
               data={lowStock}
               columns={reorderColumns}
               keyExtractor={(item) => item.id}
+              loading={loading}
               searchQuery={search}
               searchFields={[
                 (item) => item.title || item.titleEn || '',
@@ -1552,14 +1609,21 @@ export default function PurchasesPage() {
                     <button
                       onClick={() => {
                         setIsCreatePoOpen(true);
-                        const matchedSup = suppliers.find((s) => isProductAssociatedWithSupplier(item as any, s));
+                        const productProxy: CatalogProduct = {
+                          id: item.id,
+                          titleEn: item.titleEn || item.title || '',
+                          brandName: item.brandName ?? item.brand ?? null,
+                          sku: item.sku,
+                          retailPrice: 0,
+                        };
+                        const matchedSup = suppliers.find((s) => isProductAssociatedWithSupplier(productProxy, s));
                         if (matchedSup) {
                           setPoSupplierId(matchedSup.id);
                         }
                         setItemProductId(item.id);
                         setItemQty(String(item.suggestedReorder));
                       }}
-                      className="px-2 py-0.5 rounded bg-stone-900 text-stone-50 text-[10px] font-mono"
+                      className="min-h-[34px] px-3 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-[11px] font-mono font-medium cursor-pointer transition"
                     >
                       Add to PO
                     </button>
@@ -1582,7 +1646,7 @@ export default function PurchasesPage() {
                   setFormError('');
                   setIsAddVendorOpen(true);
                 }}
-                className="px-2.5 py-1 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1 cursor-pointer"
+                className="min-h-[36px] px-3 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition flex items-center gap-1 cursor-pointer shadow-2xs"
               >
                 <Plus size={12} />
                 <span>Add Vendor</span>
@@ -1593,6 +1657,7 @@ export default function PurchasesPage() {
               data={suppliers}
               columns={supplierColumns}
               keyExtractor={(sup) => sup.id}
+              loading={loading}
               searchQuery={search}
               searchFields={[
                 (sup) => sup.name,
@@ -1645,26 +1710,18 @@ export default function PurchasesPage() {
       </div>
 
       {/* MODAL 1: Create Purchase Order (PO) */}
-      {isCreatePoOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                {editingPoId ? <Edit3 size={14} className="text-stone-500" /> : <Plus size={14} className="text-stone-500" />}
-                <span>{editingPoId ? `Edit Purchase Order (${poNumber || 'PO'})` : 'Create Official Purchase Order (PO)'}</span>
-              </h3>
-              <button
-                onClick={() => {
-                  setIsCreatePoOpen(false);
-                  setEditingPoId(null);
-                }}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitCreatePo} className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+      <ResponsiveDialog
+        open={isCreatePoOpen}
+        onClose={() => {
+          setIsCreatePoOpen(false);
+          setEditingPoId(null);
+        }}
+        maxWidthClass="sm:max-w-2xl"
+        icon={editingPoId ? <Edit3 size={15} className="text-teal-700" /> : <Plus size={15} className="text-teal-700" />}
+        title={editingPoId ? `Edit Purchase Order (${poNumber || 'PO'})` : 'Create Official Purchase Order (PO)'}
+        bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        <form onSubmit={handleSubmitCreatePo} className="p-4 sm:p-5 space-y-3 text-xs overflow-y-auto flex-1">
               {formError && (
                 <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
                   {formError}
@@ -1900,35 +1957,25 @@ export default function PurchasesPage() {
                 <button
                   type="submit"
                   disabled={submitting || draftItems.length === 0}
-                  className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   <span>{editingPoId ? 'Save Changes' : 'Issue Purchase Order'}</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ResponsiveDialog>
 
       {/* MODAL 2: Receive PO Shipment (GRN) */}
-      {isReceivePoOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-md overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <PackageCheck size={14} className="text-stone-500" />
-                <span>Receive Shipment against PO (Inbound GRN)</span>
-              </h3>
-              <button
-                onClick={() => setIsReceivePoOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitReceivePo} className="p-4 space-y-3 text-xs">
+      <ResponsiveDialog
+        open={isReceivePoOpen}
+        onClose={() => setIsReceivePoOpen(false)}
+        maxWidthClass="sm:max-w-md"
+        icon={<PackageCheck size={15} className="text-teal-700" />}
+        title="Receive Shipment against PO (Inbound GRN)"
+        bodyClassName="p-4 sm:p-5"
+      >
+        <form onSubmit={handleSubmitReceivePo} className="space-y-3 text-xs">
               {formError && (
                 <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
                   {formError}
@@ -2021,35 +2068,25 @@ export default function PurchasesPage() {
                 <button
                   type="submit"
                   disabled={submitting || !selectedReceivingPoId}
-                  className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   <span>Record GRN Receiving</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ResponsiveDialog>
 
       {/* MODAL 3: Direct Inbound (Stock-In Without PO) */}
-      {isDirectInboundOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-lg max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                <Truck size={14} className="text-stone-500" />
-                <span>Direct Inbound Stock-In (Fast GRN)</span>
-              </h3>
-              <button
-                onClick={() => setIsDirectInboundOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitDirectInbound} className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+      <ResponsiveDialog
+        open={isDirectInboundOpen}
+        onClose={() => setIsDirectInboundOpen(false)}
+        maxWidthClass="sm:max-w-lg"
+        icon={<Truck size={15} className="text-teal-700" />}
+        title="Direct Inbound Stock-In (Fast GRN)"
+        bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        <form onSubmit={handleSubmitDirectInbound} className="p-4 sm:p-5 space-y-3 text-xs overflow-y-auto flex-1">
               {formError && (
                 <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
                   {formError}
@@ -2239,50 +2276,43 @@ export default function PurchasesPage() {
                 <button
                   type="button"
                   onClick={() => setIsDirectInboundOpen(false)}
-                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   <span>Stock-In Directly</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ResponsiveDialog>
 
       {/* MODAL 4: View / Edit Shipment GRN */}
-      {selectedShipment && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-xl max-h-[85vh] overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 truncate flex items-center gap-1.5">
-                {isEditingShipment ? <Edit3 size={14} className="text-stone-500" /> : <PackageCheck size={14} className="text-stone-500" />}
-                <span>
-                  {isEditingShipment
-                    ? `Edit Inbound Shipment (GRN) — ${selectedShipment.invoiceNumber}`
-                    : `Goods Received Note (GRN) — ${selectedShipment.invoiceNumber}`}
-                </span>
-              </h3>
-              <button
-                onClick={() => {
-                  setSelectedShipment(null);
-                  setIsEditingShipment(false);
-                }}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {isEditingShipment ? (
-              <form onSubmit={handleSaveShipment} className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+      <ResponsiveDialog
+        open={!!selectedShipment}
+        onClose={() => {
+          setSelectedShipment(null);
+          setIsEditingShipment(false);
+        }}
+        maxWidthClass="sm:max-w-xl"
+        icon={isEditingShipment ? <Edit3 size={15} className="text-teal-700" /> : <PackageCheck size={15} className="text-teal-700" />}
+        title={
+          selectedShipment
+            ? isEditingShipment
+              ? `Edit Inbound Shipment (GRN) — ${selectedShipment.invoiceNumber}`
+              : `Goods Received Note (GRN) — ${selectedShipment.invoiceNumber}`
+            : 'Goods Received Note'
+        }
+        bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        {selectedShipment && (
+          isEditingShipment ? (
+            <form onSubmit={handleSaveShipment} className="p-4 sm:p-5 space-y-3 text-xs overflow-y-auto flex-1">
                 {formError && (
                   <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
                     {formError}
@@ -2346,14 +2376,14 @@ export default function PurchasesPage() {
                   <button
                     type="button"
                     onClick={() => setIsEditingShipment(false)}
-                    className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                    className="min-h-[42px] px-4 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="min-h-[42px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                   >
                     {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                     <span>Save GRN Changes</span>
@@ -2424,18 +2454,18 @@ export default function PurchasesPage() {
                   </div>
                 </div>
 
-                <div className="px-4 py-2.5 border-t border-stone-200 flex justify-between gap-2 shrink-0">
+                <div className="px-4 py-3 border-t border-stone-200 bg-stone-50 flex flex-wrap justify-between gap-2 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => openEditShipment(selectedShipment)}
-                      className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
+                      className="min-h-[40px] px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-100 flex items-center gap-1 cursor-pointer"
                     >
                       <Edit3 size={13} />
                       <span>Edit GRN</span>
                     </button>
                     <button
                       onClick={() => handleDeleteShipment(selectedShipment.id, selectedShipment.invoiceNumber)}
-                      className="px-3 py-1.5 rounded border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium hover:bg-rose-100 flex items-center gap-1 cursor-pointer"
+                      className="min-h-[40px] px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs font-medium hover:bg-rose-100 flex items-center gap-1 cursor-pointer"
                     >
                       <Trash2 size={13} />
                       <span>Delete</span>
@@ -2444,42 +2474,36 @@ export default function PurchasesPage() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => window.print()}
-                      className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 flex items-center gap-1 cursor-pointer"
+                      className="min-h-[40px] px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-100 flex items-center gap-1 cursor-pointer"
                     >
                       <Printer size={13} />
                       <span>Print</span>
                     </button>
                     <button
                       onClick={() => setSelectedShipment(null)}
-                      className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
+                      className="min-h-[40px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 cursor-pointer"
                     >
                       Close
                     </button>
                   </div>
                 </div>
               </>
-            )}
-          </div>
-        </div>
-      )}
+            )
+        )}
+      </ResponsiveDialog>
 
       {/* MODAL 5: View PO Details */}
-      {selectedPo && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-xl max-h-[85vh] overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 truncate">
-                Purchase Order Details — {selectedPo.poNumber}
-              </h3>
-              <button
-                onClick={() => setSelectedPo(null)}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+      <ResponsiveDialog
+        open={!!selectedPo}
+        onClose={() => setSelectedPo(null)}
+        maxWidthClass="sm:max-w-xl"
+        icon={<PackageCheck size={15} className="text-teal-700" />}
+        title={selectedPo ? `Purchase Order Details — ${selectedPo.poNumber}` : 'Purchase Order Details'}
+        bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+      >
+        {selectedPo && (
+          <>
+            <div className="p-4 sm:p-5 space-y-3 text-xs overflow-y-auto flex-1">
               <div className="p-3 bg-stone-50 rounded border border-stone-200 grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[11px]">
                 <div>
                   <span className="text-stone-400 block uppercase">Supplier</span>
@@ -2551,44 +2575,36 @@ export default function PurchasesPage() {
                       setSelectedPo(null);
                       openReceiveForPo(po);
                     }}
-                    className="px-3 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 cursor-pointer"
+                    className="min-h-[40px] px-3.5 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 cursor-pointer"
                   >
                     Receive Shipment
                   </button>
                 )}
                 <button
                   onClick={() => setSelectedPo(null)}
-                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                  className="min-h-[40px] px-4 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-100 cursor-pointer"
                 >
                   Close
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </ResponsiveDialog>
 
       {/* MODAL 6: Add / Edit Vendor */}
-      {isAddVendorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-white rounded-lg border border-stone-200 w-full max-w-md overflow-hidden shadow-xl flex flex-col">
-            <div className="px-4 py-3 border-b border-stone-200 flex items-center justify-between shrink-0">
-              <h3 className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
-                {editingSupplierId ? <Edit3 size={14} className="text-stone-500" /> : <Building2 size={14} className="text-stone-500" />}
-                <span>{editingSupplierId ? 'Edit Supplier Profile' : 'Add Supplier / Vendor'}</span>
-              </h3>
-              <button
-                onClick={() => {
-                  setIsAddVendorOpen(false);
-                  setEditingSupplierId(null);
-                }}
-                className="text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitAddVendor} className="p-4 space-y-3 text-xs">
+      <ResponsiveDialog
+        open={isAddVendorOpen}
+        onClose={() => {
+          setIsAddVendorOpen(false);
+          setEditingSupplierId(null);
+        }}
+        maxWidthClass="sm:max-w-md"
+        icon={editingSupplierId ? <Edit3 size={15} className="text-teal-700" /> : <Building2 size={15} className="text-teal-700" />}
+        title={editingSupplierId ? 'Edit Supplier Profile' : 'Add Supplier / Vendor'}
+        bodyClassName="p-4 sm:p-5"
+      >
+        <form onSubmit={handleSubmitAddVendor} className="space-y-3 text-xs">
               {formError && (
                 <div className="p-2 rounded bg-stone-100 border border-stone-300 text-stone-700 text-xs font-mono">
                   {formError}
@@ -2681,23 +2697,21 @@ export default function PurchasesPage() {
                     setIsAddVendorOpen(false);
                     setEditingSupplierId(null);
                   }}
-                  className="px-3 py-1.5 rounded border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded bg-stone-900 text-stone-50 text-xs font-medium hover:bg-stone-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="min-h-[42px] px-4 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold hover:bg-teal-800 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                   <span>{editingSupplierId ? 'Save Changes' : 'Save Vendor'}</span>
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </ResponsiveDialog>
     </Shell>
   );
 }

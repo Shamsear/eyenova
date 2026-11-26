@@ -88,7 +88,37 @@ export default function OnlineStockPage() {
   }
 
   useEffect(() => {
-    loadProducts();
+    let active = true;
+    fetch('/api/products/online-availability')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active || !data.products) return;
+        setProducts(data.products);
+        setStatusMessage(`Loaded ${data.products.length} products`);
+        if (data.products.length > 0) {
+          const first = data.products[0];
+          setSelectedProduct(first);
+          fetch(`/api/products/online-availability?productId=${first.id}`)
+            .then((r) => r.json())
+            .then((avail) => {
+              if (!active || !avail) return;
+              setOosPowers(new Set(avail.oosPowers || []));
+              setOosCyls(new Set(avail.oosCyls || []));
+              setOosAxes(new Set(avail.oosAxes || []));
+              setOosAdds(new Set(avail.oosAdds || []));
+              setStatusMessage(`Ready: ${first.titleEn}`);
+            })
+            .catch(() => {});
+        }
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        setStatusMessage(`Error: ${errorMsg}`);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // When a product is selected, fetch its current online availability
@@ -143,16 +173,12 @@ export default function OnlineStockPage() {
     });
   }, [products, searchQuery, selectedCategory]);
 
-  // Reset pagination on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategory]);
-
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
+    const start = (safeCurrentPage - 1) * PAGE_SIZE;
     return filteredProducts.slice(start, start + PAGE_SIZE);
-  }, [filteredProducts, currentPage]);
+  }, [filteredProducts, safeCurrentPage]);
 
   // Product classification
   const isToric = useMemo(() => {
@@ -299,16 +325,16 @@ export default function OnlineStockPage() {
           <div className="flex items-center flex-wrap gap-2 shrink-0 justify-start sm:justify-end min-w-0">
             <button
               onClick={() => setIsBulkModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded transition border border-emerald-300 cursor-pointer whitespace-nowrap shadow-xs"
+              className="flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold text-teal-800 bg-teal-50 hover:bg-teal-100 rounded-lg transition border border-teal-200 cursor-pointer whitespace-nowrap shadow-2xs"
             >
-              <FileSpreadsheet size={13} className="text-emerald-600" />
+              <FileSpreadsheet size={13} className="text-teal-700" />
               <span className="truncate">Bulk Excel Shopify Update</span>
             </button>
 
             <button
               onClick={loadProducts}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
+              className="flex items-center gap-1.5 min-h-[38px] px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition border border-stone-200 cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               <RotateCcw size={12} className={isLoading ? 'animate-spin' : ''} />
               <span className="truncate">Refresh</span>
@@ -317,7 +343,7 @@ export default function OnlineStockPage() {
             <button
               onClick={handleSaveAndSync}
               disabled={isSaving || !selectedProduct}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-50 bg-stone-900 hover:bg-stone-800 rounded transition disabled:opacity-50 cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition disabled:opacity-50 cursor-pointer whitespace-nowrap shadow-xs"
             >
               <Save size={12} />
               <span className="truncate">{isSaving ? 'Syncing...' : 'Save & Sync'}</span>
@@ -329,9 +355,9 @@ export default function OnlineStockPage() {
         <div className="md:hidden flex bg-white border border-stone-200 rounded-lg p-1 gap-1 shrink-0">
           <button
             onClick={() => setMobileTab('PRODUCTS')}
-            className={`flex-1 py-1.5 rounded text-xs font-medium transition cursor-pointer truncate ${
+            className={`flex-1 min-h-[38px] py-1.5 rounded-md text-xs font-semibold transition cursor-pointer truncate ${
               mobileTab === 'PRODUCTS'
-                ? 'bg-stone-900 text-stone-50'
+                ? 'bg-teal-700 text-white'
                 : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
             }`}
           >
@@ -339,9 +365,9 @@ export default function OnlineStockPage() {
           </button>
           <button
             onClick={() => setMobileTab('MATRIX')}
-            className={`flex-1 py-1.5 rounded text-xs font-medium transition cursor-pointer truncate px-2 ${
+            className={`flex-1 min-h-[38px] py-1.5 rounded-md text-xs font-semibold transition cursor-pointer truncate px-2 ${
               mobileTab === 'MATRIX'
-                ? 'bg-stone-900 text-stone-50'
+                ? 'bg-teal-700 text-white'
                 : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
             }`}
           >
@@ -359,18 +385,24 @@ export default function OnlineStockPage() {
           >
             {/* Search Input */}
             <div className="relative mb-2 shrink-0">
-              <Search size={13} className="absolute left-2.5 top-2.5 text-stone-400" />
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder="Search catalog, SKU, brand..."
-                className="w-full bg-stone-50 border border-stone-200 rounded pl-8 pr-7 py-1.5 text-xs text-stone-900 focus:bg-white focus:outline-none focus:border-stone-900 transition"
+                className="w-full min-h-[38px] bg-stone-50 border border-stone-200 rounded-lg pl-8 pr-8 py-1.5 text-[16px] sm:text-xs text-stone-900 focus:bg-white focus:outline-none focus:border-teal-600 transition"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-2 text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
                 >
                   <X size={12} />
                 </button>
@@ -382,10 +414,13 @@ export default function OnlineStockPage() {
               {(['ALL', 'TORIC', 'MULTIFOCAL', 'SPHERICAL', 'COLOR'] as const).map((cat) => (
                 <button
                   key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider transition shrink-0 cursor-pointer ${
+                  onClick={() => {
+                    setSelectedCategory(cat);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider transition shrink-0 cursor-pointer ${
                     selectedCategory === cat
-                      ? 'bg-stone-900 text-stone-50'
+                      ? 'bg-teal-700 text-white font-semibold'
                       : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                   }`}
                 >
@@ -407,24 +442,24 @@ export default function OnlineStockPage() {
                     <div
                       key={p.id}
                       onClick={() => selectProductItem(p, true)}
-                      className={`p-2 rounded cursor-pointer transition flex items-center justify-between gap-2 ${
+                      className={`p-2.5 rounded-lg cursor-pointer transition flex items-center justify-between gap-2 ${
                         isSelected
-                          ? 'bg-stone-900 text-stone-50'
+                          ? 'bg-teal-700 text-white'
                           : 'hover:bg-stone-50 text-stone-900'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className={`text-xs font-medium truncate ${isSelected ? 'text-stone-50' : 'text-stone-900'}`}>
+                        <p className={`text-xs font-medium truncate ${isSelected ? 'text-white' : 'text-stone-900'}`}>
                           {p.titleEn}
                         </p>
-                        <p className={`text-[10px] font-mono truncate ${isSelected ? 'text-stone-300' : 'text-stone-500'}`}>
+                        <p className={`text-[10px] font-mono truncate ${isSelected ? 'text-teal-100' : 'text-stone-500'}`}>
                           {p.sku || p.brandName || 'EyeNova'}
                         </p>
                       </div>
                       <span
                         className={`text-[9px] font-mono px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
                           isSelected
-                            ? 'bg-stone-800 text-stone-200'
+                            ? 'bg-teal-800 text-teal-100'
                             : 'bg-stone-100 text-stone-600'
                         }`}
                       >
@@ -439,24 +474,24 @@ export default function OnlineStockPage() {
             {/* List Pagination Bar */}
             <div className="pt-2 mt-1 border-t border-stone-200 flex items-center justify-between text-xs text-stone-500 shrink-0">
               <span className="font-mono text-[10px] truncate">
-                {filteredProducts.length} total • p. {currentPage}/{totalPages}
+                {filteredProducts.length} total • p. {safeCurrentPage}/{totalPages}
               </span>
               <div className="flex items-center gap-1">
                 <button
-                  disabled={currentPage <= 1}
+                  disabled={safeCurrentPage <= 1}
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="p-1 rounded border border-stone-200 hover:bg-stone-100 disabled:opacity-40 cursor-pointer"
+                  className="w-8 h-8 flex items-center justify-center rounded-md border border-stone-200 hover:bg-stone-100 disabled:opacity-40 cursor-pointer"
                   title="Previous page"
                 >
-                  <ChevronLeft size={12} />
+                  <ChevronLeft size={13} />
                 </button>
                 <button
-                  disabled={currentPage >= totalPages}
+                  disabled={safeCurrentPage >= totalPages}
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  className="p-1 rounded border border-stone-200 hover:bg-stone-100 disabled:opacity-40 cursor-pointer"
+                  className="w-8 h-8 flex items-center justify-center rounded-md border border-stone-200 hover:bg-stone-100 disabled:opacity-40 cursor-pointer"
                   title="Next page"
                 >
-                  <ChevronRight size={12} />
+                  <ChevronRight size={13} />
                 </button>
               </div>
             </div>
@@ -558,10 +593,10 @@ export default function OnlineStockPage() {
                           <button
                             key={pwr}
                             onClick={() => togglePower(pwr)}
-                            className={`min-w-[56px] px-2.5 py-2 rounded text-xs font-mono font-medium transition cursor-pointer border ${
+                            className={`min-w-[58px] min-h-[38px] sm:min-h-[32px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer border ${
                               isOos
                                 ? 'bg-stone-100 border-stone-200 text-stone-400 line-through hover:bg-stone-200'
-                                : 'bg-white border-stone-300 text-stone-900 hover:border-stone-900 shadow-2xs'
+                                : 'bg-white border-stone-300 text-stone-900 hover:border-teal-600 hover:bg-teal-50/40 shadow-2xs'
                             }`}
                           >
                             {pwr}
@@ -584,10 +619,10 @@ export default function OnlineStockPage() {
                             <button
                               key={cyl}
                               onClick={() => toggleCyl(cyl)}
-                              className={`min-w-[56px] px-2.5 py-2 rounded text-xs font-mono font-medium transition cursor-pointer border ${
+                              className={`min-w-[58px] min-h-[38px] sm:min-h-[32px] px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer border ${
                                 isOos
                                   ? 'bg-stone-100 border-stone-200 text-stone-400 line-through hover:bg-stone-200'
-                                  : 'bg-white border-stone-300 text-stone-900 hover:border-stone-900 shadow-2xs'
+                                  : 'bg-white border-stone-300 text-stone-900 hover:border-teal-600 hover:bg-teal-50/40 shadow-2xs'
                               }`}
                             >
                               {cyl}
@@ -611,10 +646,10 @@ export default function OnlineStockPage() {
                             <button
                               key={ax}
                               onClick={() => toggleAxis(ax)}
-                              className={`min-w-[50px] px-2 py-2 rounded text-xs font-mono font-medium transition cursor-pointer border ${
+                              className={`min-w-[52px] min-h-[38px] sm:min-h-[32px] px-2 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer border ${
                                 isOos
                                   ? 'bg-stone-100 border-stone-200 text-stone-400 line-through hover:bg-stone-200'
-                                  : 'bg-white border-stone-300 text-stone-900 hover:border-stone-900 shadow-2xs'
+                                  : 'bg-white border-stone-300 text-stone-900 hover:border-teal-600 hover:bg-teal-50/40 shadow-2xs'
                               }`}
                             >
                               {ax}°
@@ -638,10 +673,10 @@ export default function OnlineStockPage() {
                             <button
                               key={add}
                               onClick={() => toggleAdd(add)}
-                              className={`min-w-[64px] px-3 py-2 rounded text-xs font-mono font-medium transition cursor-pointer border ${
+                              className={`min-w-[68px] min-h-[38px] sm:min-h-[32px] px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition cursor-pointer border ${
                                 isOos
                                   ? 'bg-stone-100 border-stone-200 text-stone-400 line-through hover:bg-stone-200'
-                                  : 'bg-white border-stone-300 text-stone-900 hover:border-stone-900 shadow-2xs'
+                                  : 'bg-white border-stone-300 text-stone-900 hover:border-teal-600 hover:bg-teal-50/40 shadow-2xs'
                               }`}
                             >
                               {add}

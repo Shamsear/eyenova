@@ -5,9 +5,11 @@ import { Shell } from '@/components/layout/shell';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable, Column } from '@/components/shared/data-table';
 import { StatusIndicator, StatusVariant } from '@/components/shared/status-indicator';
-import { Plus, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Check, Loader2, AlertCircle, Layers, Clock, CheckCircle2 } from 'lucide-react';
 import { STANDARD_POWERS } from '@/lib/utils';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 const SPEC_OPTIONS: SelectOption[] = [
   { value: 'Plano (0.00)', label: 'Plano (0.00)' },
@@ -81,7 +83,19 @@ export default function BatchesPage() {
   };
 
   useEffect(() => {
-    loadBatches();
+    let active = true;
+    fetch('/api/batches')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.batches) setBatches(data.batches);
+      })
+      .catch((err) => console.error('Error loading batches:', err))
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const totalBoxes = batches.reduce((sum, b) => sum + b.stockQty, 0);
@@ -124,8 +138,8 @@ export default function BatchesPage() {
       setExpDate('');
       setStockQty('');
       loadBatches();
-    } catch (err: any) {
-      setFormError(err.message || 'Error registering batch');
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Error registering batch');
     } finally {
       setSubmitting(false);
     }
@@ -156,6 +170,7 @@ export default function BatchesPage() {
     {
       key: 'specs',
       header: 'Power / Specs',
+      priority: 'standard',
       render: (b) => (
         <span className="font-mono text-xs text-stone-700 truncate block">
           {b.specs || 'Plano'}
@@ -199,20 +214,26 @@ export default function BatchesPage() {
       subtitle="First Expired, First Out Lot Controls"
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-4 space-y-3 overflow-hidden">
-        {/* KPI Strip (Strictly Single-Line) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Total Lot Inventory</span>
-            <span className="font-mono font-medium text-base text-stone-900 tabular-nums">{totalBoxes} Boxes</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Expiring in 90 Days</span>
-            <span className="font-mono font-medium text-base text-amber-700 tabular-nums">{expiringSoonCount} Lots</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Valid Fresh Stock</span>
-            <span className="font-mono font-medium text-base text-emerald-700 tabular-nums">{validCount} Lots</span>
-          </div>
+        {/* KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 shrink-0">
+          <KpiCard
+            label="Total Lot Inventory"
+            value={`${totalBoxes} Boxes`}
+            icon={<Layers size={15} />}
+          />
+          <KpiCard
+            label="Expiring in 90 Days"
+            value={`${expiringSoonCount} Lots`}
+            tone="amber"
+            icon={<Clock size={15} />}
+          />
+          <KpiCard
+            label="Valid Fresh Stock"
+            value={`${validCount} Lots`}
+            tone="emerald"
+            icon={<CheckCircle2 size={15} />}
+            className="col-span-2 sm:col-span-1"
+          />
         </div>
 
         {/* Page Header (Single-Line) */}
@@ -237,6 +258,7 @@ export default function BatchesPage() {
           data={batches}
           columns={columns}
           keyExtractor={(b) => b.id}
+          loading={loading}
           searchQuery={search}
           searchFields={[
             (b) => b.batchNo,
@@ -284,152 +306,145 @@ export default function BatchesPage() {
       </div>
 
       {/* Register Batch Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl border border-stone-200 w-full max-w-sm overflow-hidden p-4 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-stone-900">Register FEFO Batch</h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
-              >
-                <X size={14} />
-              </button>
-            </div>
+      <ResponsiveDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        maxWidthClass="sm:max-w-sm"
+        icon={<Layers size={16} className="text-teal-700" />}
+        title="Register FEFO Batch"
+        subtitle="First Expired, First Out Lot Registration"
+      >
+        <form onSubmit={handleCreateBatch} className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Batch / Lot Code <span className="text-rose-600">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              autoFocus
+              value={batchNo}
+              onChange={(e) => setBatchNo(e.target.value)}
+              placeholder="LOT-2026-X88"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
 
-            <form onSubmit={handleCreateBatch} className="space-y-2.5">
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Batch / Lot Code <span className="text-rose-600">*</span>
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Brand Name
+            </label>
+            <input
+              type="text"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="e.g. Alcon / Johnson & Johnson"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Product Description
+            </label>
+            <input
+              type="text"
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              placeholder="Dailies Total1 30pk"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-mono text-stone-500 uppercase">
+                  Specs / Power
                 </label>
-                <input
-                  type="text"
-                  required
-                  autoFocus
-                  value={batchNo}
-                  onChange={(e) => setBatchNo(e.target.value)}
-                  placeholder="LOT-2026-X88"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Brand Name
-                </label>
-                <input
-                  type="text"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                  placeholder="e.g. Alcon / Johnson & Johnson"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Product Description
-                </label>
-                <input
-                  type="text"
-                  value={product}
-                  onChange={(e) => setProduct(e.target.value)}
-                  placeholder="Dailies Total1 30pk"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[10px] font-mono text-stone-500 uppercase">
-                      Specs / Power
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setSpecs('Plano (0.00)')}
-                      className="text-[10px] text-sky-600 hover:underline cursor-pointer"
-                    >
-                      Plano
-                    </button>
-                  </div>
-                  <SearchableSelect
-                    value={specs}
-                    onChange={setSpecs}
-                    options={SPEC_OPTIONS}
-                    placeholder="-- Choose or Plano --"
-                    searchPlaceholder="Search power..."
-                    allowClear
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                    Stock Quantity
-                  </label>
-                  <input
-                    type="number"
-                    value={stockQty}
-                    onChange={(e) => setStockQty(e.target.value)}
-                    placeholder="50"
-                    className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                    Mfg Date
-                  </label>
-                  <input
-                    type="date"
-                    value={mfgDate}
-                    onChange={(e) => setMfgDate(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                    Expiry Date <span className="text-rose-600">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={expDate}
-                    onChange={(e) => setExpDate(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {formError && (
-                <div className="p-1.5 bg-stone-50 border border-stone-300 rounded text-xs text-stone-900 flex items-center gap-1.5">
-                  <AlertCircle size={12} className="text-rose-600 shrink-0" />
-                  <span className="truncate">{formError}</span>
-                </div>
-              )}
-
-              <div className="pt-2 flex justify-end gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 text-xs hover:bg-stone-50 cursor-pointer"
+                  onClick={() => setSpecs('Plano (0.00)')}
+                  className="text-[10px] font-semibold text-teal-700 hover:underline cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-3 py-1.5 rounded-md bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium transition cursor-pointer flex items-center gap-1"
-                >
-                  {submitting ? <Loader2 size={12} className="animate-spin text-stone-400" /> : <Check size={12} />}
-                  <span>Save Batch</span>
+                  Plano
                 </button>
               </div>
-            </form>
+              <SearchableSelect
+                value={specs}
+                onChange={setSpecs}
+                options={SPEC_OPTIONS}
+                placeholder="-- Choose or Plano --"
+                searchPlaceholder="Search power..."
+                allowClear
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Stock Quantity
+              </label>
+              <input
+                type="number"
+                value={stockQty}
+                onChange={(e) => setStockQty(e.target.value)}
+                placeholder="50"
+                className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Mfg Date
+              </label>
+              <input
+                type="date"
+                value={mfgDate}
+                onChange={(e) => setMfgDate(e.target.value)}
+                className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Expiry Date <span className="text-rose-600">*</span>
+              </label>
+              <input
+                type="date"
+                required
+                value={expDate}
+                onChange={(e) => setExpDate(e.target.value)}
+                className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {formError && (
+            <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 flex items-center gap-1.5">
+              <AlertCircle size={13} className="text-rose-600 shrink-0" />
+              <span className="truncate">{formError}</span>
+            </div>
+          )}
+
+          <div className="pt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="min-h-[42px] px-4 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="min-h-[42px] px-4 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              {submitting ? <Loader2 size={13} className="animate-spin text-teal-200" /> : <Check size={13} />}
+              <span>Save Batch</span>
+            </button>
+          </div>
+        </form>
+      </ResponsiveDialog>
     </Shell>
   );
 }

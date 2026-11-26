@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect, useId, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useId, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
+
+const emptySubscribe = () => () => {};
 
 export interface SelectOption {
   value: string;
@@ -51,23 +53,24 @@ export function SearchableSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number; placeAbove: boolean }>({
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number; placeAbove: boolean; isMobile: boolean }>({
     top: 0,
     left: 0,
     width: 0,
     placeAbove: false,
+    isMobile: false,
   });
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const generatedId = useId();
   const selectId = id || generatedId;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Selected Option resolution
   const selectedOption = options.find((o: SelectOption) => o.value === value);
@@ -85,21 +88,27 @@ export function SearchableSelect({
     });
   }, [options, search]);
 
-  // Update dropdown coordinates relative to viewport
+  // Update dropdown coordinates relative to viewport (clamped horizontally to avoid right-edge clipping)
   const updateCoords = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const isMobile = window.innerWidth < 640;
     const spaceBelow = window.innerHeight - rect.bottom;
     const estimatedHeight = Math.min(280, Math.max(100, filteredOptions.length * 36 + 48));
     const placeAbove = spaceBelow < estimatedHeight && rect.top > spaceBelow;
+    const targetWidth =
+      typeof menuWidth === 'number' ? menuWidth : Math.max(rect.width, 190);
+    const maxAllowedWidth = Math.min(targetWidth, window.innerWidth - 16);
+    const clampedLeft = Math.max(8, Math.min(rect.left, window.innerWidth - maxAllowedWidth - 8));
 
     setCoords({
       top: placeAbove ? rect.top - 4 : rect.bottom + 4,
-      left: rect.left,
+      left: clampedLeft,
       width: rect.width,
       placeAbove,
+      isMobile,
     });
-  }, [filteredOptions.length]);
+  }, [filteredOptions.length, menuWidth]);
 
   // Open dropdown
   const handleOpen = () => {
@@ -143,14 +152,6 @@ export function SearchableSelect({
       }, 30);
     }
   }, [isOpen]);
-
-  // Reset highlighted index when search query filters change
-  useEffect(() => {
-    if (isOpen) {
-      const firstEnabled = filteredOptions.findIndex((o: SelectOption) => !o.disabled);
-      setHighlightedIndex(firstEnabled >= 0 ? firstEnabled : 0);
-    }
-  }, [search, filteredOptions, isOpen]);
 
   // Scroll highlighted option into view
   useEffect(() => {
@@ -297,87 +298,137 @@ export function SearchableSelect({
         </span>
       </button>
 
-      {/* Floating Menu Portal */}
+      {/* Floating Menu Portal (Bottom Sheet on phones < 640px, Clamped Popover on sm+) */}
       {mounted &&
         isOpen &&
         createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              top: coords.placeAbove ? 'auto' : `${coords.top}px`,
-              bottom: coords.placeAbove ? `${window.innerHeight - coords.top}px` : 'auto',
-              left: `${coords.left}px`,
-              width: menuWidth ? (typeof menuWidth === 'number' ? `${menuWidth}px` : menuWidth) : `${Math.max(coords.width, 180)}px`,
-              zIndex: 99999,
-            }}
-            className="bg-white border border-stone-300 rounded-lg shadow-xl overflow-hidden flex flex-col text-xs animate-in fade-in zoom-in-95 duration-100"
-          >
-            {/* Search Input Filter */}
-            <div className="p-1.5 border-b border-stone-200 bg-stone-50/80 flex items-center gap-1.5 shrink-0">
-              <Search size={12} className="text-stone-400 shrink-0 ml-1" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={searchPlaceholder}
-                className="w-full bg-transparent text-xs text-stone-900 placeholder:text-stone-400 outline-none pr-1"
+          <>
+            {coords.isMobile && (
+              <div
+                onClick={handleClose}
+                className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs"
+                style={{ zIndex: 99998 }}
+                aria-hidden="true"
               />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearch('');
-                    searchInputRef.current?.focus();
-                  }}
-                  className="p-0.5 text-stone-400 hover:text-stone-700 cursor-pointer"
-                >
-                  <X size={11} />
-                </button>
-              )}
-            </div>
-
-            {/* Options List */}
+            )}
             <div
-              ref={listRef}
-              role="listbox"
-              tabIndex={-1}
-              className="max-h-56 overflow-y-auto divide-y divide-stone-100 p-0.5"
+              style={
+                coords.isMobile
+                  ? {
+                      position: 'fixed',
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 99999,
+                    }
+                  : {
+                      position: 'fixed',
+                      top: coords.placeAbove ? 'auto' : `${coords.top}px`,
+                      bottom: coords.placeAbove ? `${window.innerHeight - coords.top}px` : 'auto',
+                      left: `${coords.left}px`,
+                      width: menuWidth
+                        ? typeof menuWidth === 'number'
+                          ? `${menuWidth}px`
+                          : menuWidth
+                        : `${Math.max(coords.width, 190)}px`,
+                      maxWidth: 'calc(100vw - 16px)',
+                      zIndex: 99999,
+                    }
+              }
+              className={
+                coords.isMobile
+                  ? 'bg-white border-t border-stone-200 rounded-t-2xl shadow-2xl overflow-hidden flex flex-col max-h-[68dvh] pb-[env(safe-area-inset-bottom)] text-sm animate-in fade-in slide-in-from-bottom-4 duration-150'
+                  : 'bg-white border border-stone-300 rounded-xl shadow-xl overflow-hidden flex flex-col text-xs animate-in fade-in zoom-in-95 duration-100'
+              }
             >
-              {filteredOptions.length === 0 ? (
-                <div className="p-3 text-center text-xs text-stone-400 font-mono">
-                  No matching options
+              {coords.isMobile && (
+                <div className="flex justify-center pt-2 pb-1 shrink-0">
+                  <span className="w-9 h-1 rounded-full bg-stone-300" aria-hidden="true" />
                 </div>
-              ) : (
-                filteredOptions.map((opt: SelectOption, idx: number) => {
-                  const isSelected = opt.value === value;
-                  const isHighlighted = idx === highlightedIndex;
+              )}
 
-                  return (
-                    <div
-                      key={opt.value}
-                      role="option"
-                      aria-selected={isSelected}
-                      aria-disabled={opt.disabled}
-                      onClick={() => {
-                        if (opt.disabled) return;
-                        onChange(opt.value);
-                        handleClose();
-                      }}
-                      onMouseEnter={() => {
-                        if (!opt.disabled) setHighlightedIndex(idx);
-                      }}
-                      className={`px-2.5 py-1.5 flex items-center justify-between gap-2 transition rounded select-none ${
-                        opt.disabled
-                          ? 'opacity-40 cursor-not-allowed bg-stone-50/50'
-                          : 'cursor-pointer'
-                      } ${
-                        isHighlighted && !opt.disabled
-                          ? 'bg-stone-100 text-stone-900 font-medium'
-                          : 'text-stone-700 hover:bg-stone-50'
-                      }`}
-                    >
+              {/* Search Input Filter (16px on mobile prevents iOS auto-zoom) */}
+              <div className="p-2 sm:p-1.5 border-b border-stone-200 bg-stone-50/80 flex items-center gap-1.5 shrink-0">
+                <Search size={14} className="text-stone-400 shrink-0 ml-1" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    const nextSearch = e.target.value;
+                    setSearch(nextSearch);
+                    const q = nextSearch.trim().toLowerCase();
+                    const nextFiltered = !q
+                      ? options
+                      : options.filter((o: SelectOption) =>
+                          o.label.toLowerCase().includes(q) ||
+                          o.value.toLowerCase().includes(q) ||
+                          (o.subtext ? o.subtext.toLowerCase().includes(q) : false) ||
+                          (o.badge ? o.badge.toLowerCase().includes(q) : false)
+                        );
+                    const firstEnabled = nextFiltered.findIndex((o: SelectOption) => !o.disabled);
+                    setHighlightedIndex(firstEnabled >= 0 ? firstEnabled : 0);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={searchPlaceholder}
+                  className="w-full bg-transparent text-[16px] sm:text-xs text-stone-900 placeholder:text-stone-400 outline-none pr-1"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      const firstEnabled = options.findIndex((o: SelectOption) => !o.disabled);
+                      setHighlightedIndex(firstEnabled >= 0 ? firstEnabled : 0);
+                      searchInputRef.current?.focus();
+                    }}
+                    className="p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Options List */}
+              <div
+                ref={listRef}
+                role="listbox"
+                tabIndex={-1}
+                className="max-h-[48dvh] sm:max-h-56 overflow-y-auto divide-y divide-stone-100 p-1 sm:p-0.5"
+              >
+                {filteredOptions.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-stone-400 font-mono">
+                    No matching options
+                  </div>
+                ) : (
+                  filteredOptions.map((opt: SelectOption, idx: number) => {
+                    const isSelected = opt.value === value;
+                    const isHighlighted = idx === highlightedIndex;
+
+                    return (
+                      <div
+                        key={opt.value}
+                        role="option"
+                        aria-selected={isSelected}
+                        aria-disabled={opt.disabled}
+                        onClick={() => {
+                          if (opt.disabled) return;
+                          onChange(opt.value);
+                          handleClose();
+                        }}
+                        onMouseEnter={() => {
+                          if (!opt.disabled) setHighlightedIndex(idx);
+                        }}
+                        className={`min-h-[44px] sm:min-h-0 px-3 py-2 sm:px-2.5 sm:py-1.5 flex items-center justify-between gap-2 transition rounded-lg sm:rounded select-none ${
+                          opt.disabled
+                            ? 'opacity-40 cursor-not-allowed bg-stone-50/50'
+                            : 'cursor-pointer'
+                        } ${
+                          isHighlighted && !opt.disabled
+                            ? 'bg-teal-50/70 text-stone-900 font-medium'
+                            : 'text-stone-700 hover:bg-stone-50'
+                        }`}
+                      >
                       {renderOption ? (
                         renderOption(opt)
                       ) : (
@@ -410,7 +461,8 @@ export function SearchableSelect({
                 })
               )}
             </div>
-          </div>,
+          </div>
+          </>,
           document.body
         )}
     </div>

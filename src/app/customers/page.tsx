@@ -6,9 +6,11 @@ import { CustomerItem } from '@/lib/types';
 import { formatQar } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable, Column } from '@/components/shared/data-table';
-import { StatusIndicator } from '@/components/shared/status-indicator';
-import { UserPlus, X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { UserPlus, Check, Loader2, AlertCircle, Users, Wallet, Award, Phone, Mail } from 'lucide-react';
 import { SearchableSelect, type SelectOption } from '@/components/shared/searchable-select';
+import { KpiCard } from '@/components/ui/kpi-card';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
+import { SlideOverDrawer } from '@/components/ui/slide-over-drawer';
 
 const TAG_FILTERS = [
   { id: 'ALL', label: 'All Clients' },
@@ -27,6 +29,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerItem | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -51,7 +54,21 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
-    loadCustomers();
+    let active = true;
+    fetch('/api/customers')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.customers) setCustomers(data.customers);
+      })
+      .catch((err) => {
+        console.error('Error loading customers:', err);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
@@ -85,8 +102,8 @@ export default function CustomersPage() {
       setEmail('');
       setCredit('0');
       loadCustomers();
-    } catch (err: any) {
-      setFormError(err.message || 'Error saving customer');
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Error saving customer');
     } finally {
       setCreating(false);
     }
@@ -117,6 +134,7 @@ export default function CustomersPage() {
     {
       key: 'email',
       header: 'Email Address',
+      priority: 'wide',
       render: (c) => (
         <span className="text-stone-500 text-[11px] truncate block">
           {c.email || '—'}
@@ -126,8 +144,15 @@ export default function CustomersPage() {
     {
       key: 'tag',
       header: 'Tag',
+      priority: 'standard',
       render: (c) => (
-        <span className="font-mono text-[10px] text-stone-600 uppercase px-1.5 py-0.5 rounded bg-stone-100 border border-stone-200">
+        <span
+          className={`font-mono text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+            c.tag === 'VIP'
+              ? 'bg-teal-50 text-teal-800 border-teal-200 font-semibold'
+              : 'bg-stone-100 text-stone-600 border-stone-200'
+          }`}
+        >
           {c.tag || 'REGULAR'}
         </span>
       ),
@@ -150,20 +175,26 @@ export default function CustomersPage() {
       subtitle="Client Profiles & Store Credit"
     >
       <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-4 space-y-3 overflow-hidden">
-        {/* KPI Strip (Strictly Single-Line) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 shrink-0">
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Registered Clients</span>
-            <span className="font-mono font-medium text-base text-stone-900 tabular-nums">{customers.length}</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">Store Credit Held</span>
-            <span className="font-mono font-medium text-base text-emerald-700 tabular-nums">{formatQar(totalCredit)}</span>
-          </div>
-          <div className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between">
-            <span className="text-[11px] font-mono text-stone-500 uppercase tracking-wider">VIP Members</span>
-            <span className="font-mono font-medium text-base text-stone-900 tabular-nums">{vipCount}</span>
-          </div>
+        {/* KPI Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 shrink-0">
+          <KpiCard
+            label="Registered Clients"
+            value={customers.length}
+            icon={<Users size={15} />}
+          />
+          <KpiCard
+            label="VIP Members"
+            value={vipCount}
+            tone="teal"
+            icon={<Award size={15} />}
+          />
+          <KpiCard
+            label="Store Credit Held"
+            value={formatQar(totalCredit)}
+            tone="emerald"
+            icon={<Wallet size={15} />}
+            className="col-span-2 sm:col-span-1"
+          />
         </div>
 
         {/* Page Header (Single-Line) */}
@@ -188,6 +219,8 @@ export default function CustomersPage() {
           data={customers}
           columns={columns}
           keyExtractor={(c) => c.id}
+          loading={loading}
+          onRowClick={(c) => setSelectedCustomer(c)}
           searchQuery={search}
           searchFields={[
             (c) => c.fullName || '',
@@ -207,7 +240,13 @@ export default function CustomersPage() {
                 <span className="font-medium text-xs text-stone-900 truncate">
                   {c.fullName || 'Customer'}
                 </span>
-                <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200 shrink-0">
+                <span
+                  className={`font-mono text-[9px] uppercase px-1.5 py-0.5 rounded border shrink-0 ${
+                    c.tag === 'VIP'
+                      ? 'bg-teal-50 text-teal-800 border-teal-200 font-semibold'
+                      : 'bg-stone-100 text-stone-600 border-stone-200'
+                  }`}
+                >
                   {c.tag || 'REGULAR'}
                 </span>
               </div>
@@ -230,118 +269,182 @@ export default function CustomersPage() {
         />
       </div>
 
-      {/* Add New Customer Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl border border-stone-200 w-full max-w-sm overflow-hidden p-4 space-y-3 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-medium text-stone-900">Add Customer Profile</h3>
+      {/* Client Profile Detail Slide-Over Drawer */}
+      <SlideOverDrawer
+        open={!!selectedCustomer}
+        onClose={() => setSelectedCustomer(null)}
+        widthClass="sm:w-[420px]"
+        title={selectedCustomer?.fullName || 'Customer Profile'}
+        subtitle={selectedCustomer ? `ID: ${selectedCustomer.id}` : undefined}
+        badge={
+          selectedCustomer && (
+            <span
+              className={`font-mono text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+                selectedCustomer.tag === 'VIP'
+                  ? 'bg-teal-50 text-teal-800 border-teal-200 font-semibold'
+                  : 'bg-stone-100 text-stone-600 border-stone-200'
+              }`}
+            >
+              {selectedCustomer.tag || 'REGULAR'}
+            </span>
+          )
+        }
+        footer={
+          selectedCustomer && (
+            <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                type="button"
+                onClick={() => setSelectedCustomer(null)}
+                className="min-h-[42px] px-4 rounded-lg border border-stone-200 bg-white text-stone-700 text-xs font-medium hover:bg-stone-100 cursor-pointer transition"
               >
-                <X size={14} />
+                Close
               </button>
             </div>
-
-            <form onSubmit={handleCreateCustomer} className="space-y-2.5">
+          )
+        }
+      >
+        {selectedCustomer && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200 flex items-center justify-between">
               <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Mobile Phone Number <span className="text-rose-600">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  autoFocus
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+974 5512 3456"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-teal-700 block">
+                  Available Store Credit
+                </span>
+                <span className="font-mono text-xl font-bold text-teal-900 tabular-nums mt-0.5 block">
+                  {formatQar(selectedCustomer.storeCreditQar || 0)}
+                </span>
               </div>
+              <Wallet size={20} className="text-teal-700" />
+            </div>
 
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Fatima Al-Kuwari"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.qa"
-                  className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                    Tag
-                  </label>
-                  <SearchableSelect
-                    value={tag}
-                    onChange={setTag}
-                    options={CUSTOMER_TAG_OPTIONS}
-                    placeholder="Select tag..."
-                    searchPlaceholder="Search tag..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
-                    Credit (QAR)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={credit}
-                    onChange={(e) => setCredit(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full text-xs p-1.5 bg-stone-50 border border-stone-200 rounded-md font-mono focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {formError && (
-                <div className="p-1.5 bg-stone-50 border border-stone-300 rounded text-xs text-stone-900 flex items-center gap-1.5">
-                  <AlertCircle size={12} className="text-rose-600 shrink-0" />
-                  <span className="truncate">{formError}</span>
-                </div>
-              )}
-
-              <div className="pt-2 flex justify-end gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 text-stone-700 text-xs hover:bg-stone-50 cursor-pointer"
+            <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-stone-500 font-mono text-[11px]">
+                  <Phone size={12} /> Mobile
+                </span>
+                <a
+                  href={`tel:${selectedCustomer.phone}`}
+                  className="font-mono font-medium text-teal-800 hover:underline"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-3 py-1.5 rounded-md bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium transition cursor-pointer flex items-center gap-1"
-                >
-                  {creating ? <Loader2 size={12} className="animate-spin text-stone-400" /> : <Check size={12} />}
-                  <span>Save Client</span>
-                </button>
+                  {selectedCustomer.phone}
+                </a>
               </div>
-            </form>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-stone-500 font-mono text-[11px]">
+                  <Mail size={12} /> Email
+                </span>
+                <span className="text-stone-800 truncate">{selectedCustomer.email || '—'}</span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </SlideOverDrawer>
+
+      {/* Add New Customer Modal */}
+      <ResponsiveDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        maxWidthClass="sm:max-w-sm"
+        icon={<UserPlus size={16} className="text-teal-700" />}
+        title="Add Customer Profile"
+        subtitle="Client Directory & Store Credit"
+      >
+        <form onSubmit={handleCreateCustomer} className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Mobile Phone Number <span className="text-rose-600">*</span>
+            </label>
+            <input
+              type="tel"
+              required
+              autoFocus
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+974 5512 3456"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Full Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Fatima Al-Kuwari"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.qa"
+              className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg focus:bg-white focus:border-teal-600 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Tag
+              </label>
+              <SearchableSelect
+                value={tag}
+                onChange={setTag}
+                options={CUSTOMER_TAG_OPTIONS}
+                placeholder="Select tag..."
+                searchPlaceholder="Search tag..."
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-stone-500 uppercase mb-1">
+                Credit (QAR)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={credit}
+                onChange={(e) => setCredit(e.target.value)}
+                placeholder="0.00"
+                className="w-full text-[16px] sm:text-xs px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg font-mono focus:bg-white focus:border-teal-600 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {formError && (
+            <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 flex items-center gap-1.5">
+              <AlertCircle size={13} className="text-rose-600 shrink-0" />
+              <span className="truncate">{formError}</span>
+            </div>
+          )}
+
+          <div className="pt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="min-h-[42px] px-4 rounded-lg border border-stone-200 text-stone-700 text-xs font-medium hover:bg-stone-50 cursor-pointer transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="min-h-[42px] px-4 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              {creating ? <Loader2 size={13} className="animate-spin text-teal-200" /> : <Check size={13} />}
+              <span>Save Client</span>
+            </button>
+          </div>
+        </form>
+      </ResponsiveDialog>
     </Shell>
   );
 }

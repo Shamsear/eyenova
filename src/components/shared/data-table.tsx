@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Pagination } from './pagination';
 import { EmptyState } from './empty-state';
+import { TableSkeleton } from '@/components/ui/skeletons';
 import { Search } from 'lucide-react';
 import { Rise } from 'cube-motion/react';
 
@@ -14,6 +15,8 @@ export interface Column<T> {
   className?: string;
   headerClassName?: string;
   width?: string;
+  /** Controls responsive visibility on tablets/laptops: essential (always), standard (lg+), wide (xl+) */
+  priority?: 'essential' | 'standard' | 'wide';
 }
 
 interface DataTableProps<T> {
@@ -28,6 +31,7 @@ interface DataTableProps<T> {
   renderCard?: (item: T) => React.ReactNode;
   emptyTitle?: string;
   emptyDescription?: string;
+  loading?: boolean;
   className?: string;
   onRowClick?: (item: T) => void;
 }
@@ -44,16 +48,24 @@ export function DataTable<T>({
   renderCard,
   emptyTitle = 'No records found',
   emptyDescription = 'There are no items matching the current view.',
+  loading = false,
   className = '',
   onRowClick,
 }: DataTableProps<T>) {
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const priorityCellClass = (priority?: Column<T>['priority']) => {
+    if (priority === 'wide') return 'hidden xl:table-cell';
+    if (priority === 'standard') return 'hidden lg:table-cell';
+    return '';
+  };
+  const [pageState, setPageState] = useState<{ page: number; query: string }>({
+    page: 1,
+    query: searchQuery,
+  });
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
 
-  // Reset to page 1 whenever search query changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
+  const setCurrentPage = (page: number) => {
+    setPageState({ page, query: searchQuery });
+  };
 
   // Step 1: Global Search & Filter across the entire dataset FIRST
   const filteredData = useMemo(() => {
@@ -78,16 +90,11 @@ export function DataTable<T>({
     return result;
   }, [data, searchQuery, searchFields, filterFn]);
 
-  // Total count & page clamp
+  // Total count & derived clamped page (resets to 1 whenever searchQuery changes)
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-
-  // Auto-clamp current page if total pages shrunk
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+  const rawPage = pageState.query === searchQuery ? pageState.page : 1;
+  const currentPage = Math.min(Math.max(1, rawPage), totalPages);
 
   // Step 2: Slice for viewport
   const paginatedData = useMemo(() => {
@@ -96,10 +103,12 @@ export function DataTable<T>({
   }, [filteredData, currentPage, pageSize]);
 
   return (
-    <div className={`flex flex-col flex-1 min-h-0 bg-white border border-stone-200 rounded-lg overflow-hidden shadow-none ${className}`}>
+    <div className={`flex flex-col flex-1 min-h-0 bg-white border border-stone-200 rounded-xl overflow-hidden shadow-none ${className}`}>
       {/* Content Container */}
       <div className="flex-1 min-h-0 overflow-auto">
-        {totalItems === 0 ? (
+        {loading && data.length === 0 ? (
+          <TableSkeleton rows={7} cols={Math.min(6, columns.length)} />
+        ) : totalItems === 0 ? (
           <EmptyState
             title={emptyTitle}
             description={searchQuery ? 'Try modifying your search query or filter options.' : emptyDescription}
@@ -107,7 +116,7 @@ export function DataTable<T>({
           />
         ) : (
           <>
-            {/* Desktop / Laptop Table View (Hidden on screens < 768px) */}
+            {/* Desktop / Tablet Table View (Hidden on screens < 768px) */}
             <table className="hidden md:table w-full border-collapse text-left text-xs">
               <thead className="bg-stone-50 border-b border-stone-200 sticky top-0 z-10 select-none">
                 <tr>
@@ -115,28 +124,35 @@ export function DataTable<T>({
                     <th
                       key={col.key}
                       style={{ width: col.width }}
-                      className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-stone-500 font-medium whitespace-nowrap ${
+                      className={`px-3 py-2.5 text-[10px] font-mono uppercase tracking-wider text-stone-500 font-medium whitespace-nowrap ${
                         col.align === 'right'
                           ? 'text-right'
                           : col.align === 'center'
                           ? 'text-center'
                           : 'text-left'
-                      } ${col.headerClassName || ''}`}
+                      } ${priorityCellClass(col.priority)} ${col.headerClassName || ''}`}
                     >
                       {col.header}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <Rise as="tbody" targets="children" stagger={15} className="divide-y divide-stone-100">
+              <Rise as="tbody" targets="children" stagger={12} className="divide-y divide-stone-100">
                 {paginatedData.map((item) => {
                   const rowKey = keyExtractor(item);
                   return (
                     <tr
                       key={rowKey}
                       onClick={() => onRowClick && onRowClick(item)}
-                      className={`h-10 hover:bg-stone-50/80 transition-colors ${
-                        onRowClick ? 'cursor-pointer' : ''
+                      tabIndex={onRowClick ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onRowClick(item);
+                        }
+                      }}
+                      className={`min-h-[44px] h-11 hover:bg-teal-50/40 transition-colors ${
+                        onRowClick ? 'cursor-pointer focus-visible:bg-teal-50/60' : ''
                       }`}
                     >
                       {columns.map((col) => (
@@ -148,7 +164,7 @@ export function DataTable<T>({
                               : col.align === 'center'
                               ? 'text-center'
                               : 'text-left'
-                          } ${col.className || ''}`}
+                          } ${priorityCellClass(col.priority)} ${col.className || ''}`}
                         >
                           {col.render
                             ? col.render(item)

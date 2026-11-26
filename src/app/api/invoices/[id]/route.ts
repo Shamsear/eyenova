@@ -23,6 +23,7 @@ export async function PATCH(
       deliveryFeeQar,
       totalQar,
       salespersonName,
+      issuedAt,
       // Order-level fields (updated via the linked order)
       customerEmail,
       paymentMethod,
@@ -38,7 +39,13 @@ export async function PATCH(
       // 1. Fetch invoice to get orderId
       const invoice = await tx.invoice.findUnique({
         where: { id },
-        select: { id: true, orderId: true, status: true },
+        select: {
+          id: true,
+          orderId: true,
+          status: true,
+          paidAt: true,
+          order: { select: { orderNumber: true } },
+        },
       });
       if (!invoice) throw new Error('Invoice not found');
 
@@ -63,21 +70,36 @@ export async function PATCH(
       if (totalQar !== undefined) invoiceData.totalQar = totalQar;
       if (salespersonName !== undefined) invoiceData.salespersonName = salespersonName;
 
+      let parsedDate: Date | null = null;
+      if (issuedAt !== undefined && issuedAt !== null && issuedAt !== '') {
+        const d = new Date(issuedAt);
+        if (!isNaN(d.getTime())) {
+          parsedDate = d;
+          invoiceData.issuedAt = parsedDate;
+          invoiceData.createdAt = parsedDate;
+        }
+      }
+
       if (status !== undefined) {
         invoiceData.status = status;
         if (status === 'PENDING_SETTLEMENT') {
           invoiceData.paidAt = null;
         } else if (status === 'PAID') {
-          invoiceData.paidAt = new Date();
+          invoiceData.paidAt = parsedDate || new Date();
         }
       } else if (isAggregator) {
         invoiceData.status = 'PENDING_SETTLEMENT';
         invoiceData.paidAt = null;
+      } else if (parsedDate && invoice.paidAt) {
+        invoiceData.paidAt = parsedDate;
       }
 
       // 4. Update linked Order fields (if order exists)
       if (invoice.orderId) {
         const orderData: Record<string, unknown> = {};
+        if (parsedDate) {
+          orderData.createdAt = parsedDate;
+        }
         if (customerName !== undefined) orderData.customerName = customerName;
         if (customerPhone !== undefined) orderData.customerPhone = customerPhone;
         if (customerEmail !== undefined) {
@@ -166,8 +188,51 @@ export async function PATCH(
                 quantity: item.quantity,
                 unitPriceQar: item.unitPrice,
                 totalPriceQar: item.total,
+                ...(parsedDate ? { createdAt: parsedDate } : {}),
               },
             });
+          }
+        } else if (parsedDate) {
+          await tx.orderItem.updateMany({
+            where: { orderId: invoice.orderId },
+            data: { createdAt: parsedDate },
+          });
+        }
+
+        // 5b. Update linked FinancialAuditLedger timestamp if date changed
+        if (parsedDate && invoice.order?.orderNumber) {
+          await tx.financialAuditLedger.updateMany({
+            where: {
+              OR: [
+                { referenceId: invoice.order.orderNumber },
+                { notes: { contains: invoice.order.orderNumber } },
+              ],
+            },
+            data: { timestamp: parsedDate },
+          });
+        }
+
+        // 5c. Update FinancialAuditLedger distribution if Split payment portions changed
+        if (paymentMethod === 'SPLIT' && paymentReference && invoice.order?.orderNumber) {
+          const match = paymentReference.match(/Cash\s+([\d.]+).*?Card\s+([\d.]+)/i);
+          if (match) {
+            const splitCash = parseFloat(match[1]);
+            const splitBank = parseFloat(match[2]);
+            if (!isNaN(splitCash) && !isNaN(splitBank)) {
+              await tx.financialAuditLedger.updateMany({
+                where: {
+                  OR: [
+                    { referenceId: invoice.order.orderNumber },
+                    { notes: { contains: invoice.order.orderNumber } },
+                  ],
+                },
+                data: {
+                  cashAmountQar: splitCash,
+                  bankAmountQar: splitBank,
+                  paymentChannel: 'SPLIT',
+                },
+              });
+            }
           }
         }
       }

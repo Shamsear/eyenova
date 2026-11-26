@@ -1,98 +1,31 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
+import { navSections } from '@/lib/navigation';
 import {
-  ShoppingCart,
-  Receipt,
-  Globe,
-  Package,
-  Truck,
-  CalendarClock,
-  ClipboardCheck,
-  Landmark,
-  Wallet,
-  BarChart3,
-  Bot,
-  LayoutDashboard,
-  Users,
-  Settings,
-  Tv,
   ChevronLeft,
   ChevronRight,
   Maximize2,
   Minimize2,
-  SlidersHorizontal,
   Lock,
-  History,
-  Layers,
+  X,
 } from 'lucide-react';
 
-interface NavSection {
-  title: string;
-  items: {
-    title: string;
-    href: string;
-    icon: React.ElementType;
-    shortcut: string;
-    adminOnly?: boolean;
-  }[];
-}
-
-const navSections: NavSection[] = [
-  {
-    title: 'REGISTER & BILLING',
-    items: [
-      { title: 'POS Checkout', href: '/pos', icon: ShoppingCart, shortcut: 'Ctrl+1' },
-      { title: 'Invoices & Receipts', href: '/invoices', icon: Receipt, shortcut: 'Ctrl+2' },
-      { title: 'Online Orders', href: '/online-orders', icon: Globe, shortcut: 'Ctrl+3' },
-    ],
-  },
-  {
-    title: 'INVENTORY & SUPPLY',
-    items: [
-      { title: 'Product Catalog', href: '/products', icon: Package, shortcut: 'Ctrl+4' },
-      { title: 'Purchases & Inbound', href: '/purchases', icon: Truck, shortcut: 'Ctrl+5' },
-      { title: 'Stock Cardex', href: '/cardex', icon: History, shortcut: 'F6' },
-      { title: 'FEFO Batches', href: '/batches', icon: CalendarClock, shortcut: 'Ctrl+6' },
-      { title: 'Physical Stock Audit', href: '/stock-count', icon: ClipboardCheck, shortcut: 'Ctrl+7' },
-      { title: 'Online Stock Matrix', href: '/online-stock', icon: SlidersHorizontal, shortcut: 'Ctrl+0', adminOnly: true },
-    ],
-  },
-  {
-    title: 'FINANCIAL & TREASURY',
-    items: [
-      { title: 'Channels & Snoonu Profit', href: '/channels', icon: Layers, shortcut: 'Ctrl+8' },
-      { title: 'Company Treasury', href: '/treasury', icon: Landmark, shortcut: 'Ctrl+9', adminOnly: true },
-      { title: 'Store Expenses', href: '/expenses', icon: Wallet, shortcut: 'Ctrl+0' },
-      { title: 'Financial Reports', href: '/reports', icon: BarChart3, shortcut: 'F4', adminOnly: true },
-    ],
-  },
-  {
-    title: 'MANAGEMENT',
-    items: [
-      { title: 'AI Commercial Advisor', href: '/advisor', icon: Bot, shortcut: 'F5', adminOnly: true },
-      { title: 'Overview Dashboard', href: '/dashboard', icon: LayoutDashboard, shortcut: 'F1', adminOnly: true },
-      { title: 'Customers Directory', href: '/customers', icon: Users, shortcut: 'F2' },
-      { title: 'System Settings', href: '/settings', icon: Settings, shortcut: 'F3', adminOnly: true },
-      { title: 'Customer Display', href: '/customer-display', icon: Tv, shortcut: 'Ext' },
-    ],
-  },
-];
+const emptySubscribe = () => () => {};
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
   const activeItemRef = useRef<HTMLAnchorElement | null>(null);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // When pathname changes or on mount, auto-scroll and focus the active link
   useEffect(() => {
     if (activeItemRef.current) {
       activeItemRef.current.scrollIntoView({
@@ -119,7 +52,11 @@ export function Sidebar() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const handleFsChange = () => {
-      const doc = document as any;
+      const doc = document as Document & {
+        webkitFullscreenElement?: Element;
+        mozFullScreenElement?: Element;
+        msFullscreenElement?: Element;
+      };
       const activeFs = !!(
         doc.fullscreenElement ||
         doc.webkitFullscreenElement ||
@@ -146,7 +83,6 @@ export function Sidebar() {
   const collapsed = mounted ? isSidebarCollapsed : false;
   const currentUser = mounted ? user : null;
 
-  // Filter sections and items based on role (hydrates cleanly with 0 mismatch)
   const visibleSections = navSections
     .map((section) => ({
       ...section,
@@ -167,15 +103,16 @@ export function Sidebar() {
       {isMobileMenuOpen && (
         <div
           onClick={() => setMobileMenuOpen(false)}
-          className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-150"
+          className="fixed inset-0 bg-stone-900/45 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-150"
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 bottom-0 z-50 bg-stone-50 border-r border-stone-200 text-stone-800 flex flex-col transition-all duration-200 select-none ${
+        aria-label="Primary navigation"
+        className={`fixed top-0 left-0 bottom-0 z-50 md:static md:z-auto bg-stone-50 border-r border-stone-200 text-stone-800 flex flex-col shrink-0 transition-all duration-200 select-none ${
           isMobileMenuOpen
-            ? 'translate-x-0 w-60 shadow-xl'
+            ? 'translate-x-0 w-72 shadow-2xl'
             : '-translate-x-full md:translate-x-0 ' + (collapsed ? 'md:w-14' : 'md:w-56')
         }`}
       >
@@ -183,29 +120,34 @@ export function Sidebar() {
         {collapsed && !isMobileMenuOpen ? (
           <div className="h-11 border-b border-stone-200 flex items-center justify-center px-1.5 shrink-0 bg-white">
             <button
+              type="button"
               onClick={toggleSidebar}
               title="EyeNova Optics (Click to expand sidebar)"
               aria-label="Expand Sidebar"
-              className="w-8 h-8 rounded-md bg-stone-100 hover:bg-stone-200 border border-stone-200 p-1 flex items-center justify-center shrink-0 transition cursor-pointer relative group"
+              className="w-9 h-9 rounded-lg bg-stone-100 hover:bg-teal-50 border border-stone-200 hover:border-teal-200 p-1 flex items-center justify-center shrink-0 transition cursor-pointer relative group"
             >
               <Image
                 src="/logo.png"
                 alt="EyeNova Logo"
                 width={22}
                 height={22}
-                className="object-contain transition-opacity duration-150 group-hover:opacity-20"
+                className="object-contain transition-opacity duration-150 group-hover:opacity-15"
                 style={{ width: 'auto', height: 'auto' }}
               />
               <ChevronRight
-                size={14}
-                className="absolute inset-0 m-auto text-stone-700 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                size={15}
+                className="absolute inset-0 m-auto text-teal-700 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
               />
             </button>
           </div>
         ) : (
-          <div className="h-11 border-b border-stone-200 flex items-center justify-between px-3 shrink-0 bg-white">
-            <Link href="/pos" className="flex items-center gap-2 overflow-hidden group min-w-0">
-              <div className="w-6 h-6 rounded-md bg-stone-100 border border-stone-200 p-0.5 flex items-center justify-center shrink-0">
+          <div className="h-12 md:h-11 border-b border-stone-200 flex items-center justify-between px-3 shrink-0 bg-white">
+            <Link
+              href="/pos"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 overflow-hidden group min-w-0"
+            >
+              <div className="w-7 h-7 rounded-lg bg-teal-700/10 border border-teal-700/20 p-1 flex items-center justify-center shrink-0">
                 <Image
                   src="/logo.png"
                   alt="EyeNova Logo"
@@ -216,32 +158,47 @@ export function Sidebar() {
                 />
               </div>
               <div className="truncate">
-                <span className="font-medium text-stone-900 text-xs tracking-tight block leading-tight truncate">
+                <span className="font-semibold text-stone-900 text-xs tracking-tight block leading-tight truncate">
                   EyeNova Optics
+                </span>
+                <span className="text-[10px] font-mono text-teal-700 block leading-tight">
+                  POS &amp; Billing
                 </span>
               </div>
             </Link>
 
             <button
+              type="button"
               onClick={toggleSidebar}
-              className="hidden md:flex w-5 h-5 rounded hover:bg-stone-100 text-stone-400 hover:text-stone-700 items-center justify-center transition cursor-pointer shrink-0"
+              className="hidden md:flex w-7 h-7 rounded-md hover:bg-stone-100 text-stone-400 hover:text-stone-800 items-center justify-center transition cursor-pointer shrink-0"
               aria-label="Collapse Navigation"
               title="Collapse Sidebar"
             >
-              <ChevronLeft size={13} />
+              <ChevronLeft size={14} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden w-9 h-9 rounded-lg hover:bg-stone-100 text-stone-500 flex items-center justify-center transition cursor-pointer shrink-0"
+              aria-label="Close Navigation Menu"
+            >
+              <X size={16} />
             </button>
           </div>
         )}
 
         {/* Operator Profile Card */}
         {currentUser && (!collapsed || isMobileMenuOpen) && (
-          <div className="p-2 mx-2 mt-2 bg-white rounded-lg border border-stone-200 flex items-center justify-between gap-1.5 shrink-0">
+          <div className="p-2 mx-2 mt-2 bg-white rounded-xl border border-stone-200 flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-md bg-stone-100 text-stone-700 font-mono text-[10px] flex items-center justify-center font-medium shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 font-mono text-[10px] flex items-center justify-center font-semibold shrink-0">
                 {currentUser.initials || 'OP'}
               </div>
               <div className="truncate">
-                <span className="font-medium text-xs text-stone-900 truncate block leading-tight">{currentUser.fullName}</span>
+                <span className="font-medium text-xs text-stone-900 truncate block leading-tight">
+                  {currentUser.fullName}
+                </span>
                 <span className="text-[9px] font-mono text-stone-500 block leading-tight truncate">
                   {currentUser.roleBadge || currentUser.role}
                 </span>
@@ -249,11 +206,13 @@ export function Sidebar() {
             </div>
 
             <button
+              type="button"
               onClick={lockStation}
               title="Lock Station"
-              className="p-1 rounded hover:bg-stone-100 text-stone-400 hover:text-stone-800 transition cursor-pointer shrink-0"
+              aria-label="Lock Station"
+              className="w-8 h-8 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-900 flex items-center justify-center transition cursor-pointer shrink-0"
             >
-              <Lock size={12} />
+              <Lock size={13} />
             </button>
           </div>
         )}
@@ -278,31 +237,37 @@ export function Sidebar() {
                     href={item.href}
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all duration-150 group cursor-pointer ${
+                    className={`flex items-center gap-2 px-2.5 min-h-[40px] md:min-h-[34px] py-1.5 rounded-lg text-xs transition-all duration-150 group cursor-pointer ${
                       isActive
                         ? 'bg-stone-900 text-white font-medium shadow-xs'
                         : 'text-stone-600 hover:bg-stone-200/60 hover:text-stone-900'
-                    } ${collapsed && !isMobileMenuOpen ? 'justify-center px-0 w-9 h-9 mx-auto' : ''}`}
-                    title={collapsed && !isMobileMenuOpen ? `${item.title} (${item.shortcut})` : undefined}
+                    } ${collapsed && !isMobileMenuOpen ? 'justify-center px-0 w-10 h-10 mx-auto' : ''}`}
+                    title={
+                      collapsed && !isMobileMenuOpen
+                        ? `${item.title}${item.shortcut ? ` (${item.shortcut})` : ''}`
+                        : undefined
+                    }
                   >
                     <Icon
                       size={15}
                       className={`shrink-0 transition-colors ${
-                        isActive ? 'text-white' : 'text-stone-400 group-hover:text-stone-700'
+                        isActive ? 'text-teal-300' : 'text-stone-400 group-hover:text-stone-700'
                       }`}
                     />
                     {(!collapsed || isMobileMenuOpen) && (
                       <>
                         <span className="truncate flex-1">{item.title}</span>
-                        <span
-                          className={`text-[9px] font-mono px-1 py-0.5 rounded shrink-0 transition-colors ${
-                            isActive
-                              ? 'bg-stone-800 text-stone-300'
-                              : 'text-stone-400 group-hover:text-stone-600'
-                          }`}
-                        >
-                          {item.shortcut}
-                        </span>
+                        {item.shortcut && (
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 transition-colors ${
+                              isActive
+                                ? 'bg-stone-800 text-stone-300'
+                                : 'text-stone-400 group-hover:text-stone-600'
+                            }`}
+                          >
+                            {item.shortcut}
+                          </span>
+                        )}
                       </>
                     )}
                   </Link>
@@ -313,26 +278,30 @@ export function Sidebar() {
         </div>
 
         {/* Footer Actions */}
-        <div className="border-t border-stone-200 p-1.5 flex items-center justify-between gap-1 text-[11px] text-stone-600 bg-white shrink-0">
+        <div className="border-t border-stone-200 p-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-1 text-[11px] text-stone-600 bg-white shrink-0">
           <button
+            type="button"
             onClick={lockStation}
             title="Lock Register"
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded hover:bg-stone-100 transition cursor-pointer"
+            className="flex-1 min-h-[38px] md:min-h-[32px] flex items-center justify-center gap-1.5 py-1.5 rounded-lg hover:bg-stone-100 transition cursor-pointer"
           >
-            <Lock size={12} className="text-stone-500" />
+            <Lock size={13} className="text-stone-500" />
             {(!collapsed || isMobileMenuOpen) && <span className="truncate">Lock</span>}
           </button>
           <button
+            type="button"
             onClick={() => toggleFullscreen()}
             title={isFullscreen ? 'Exit Fullscreen (Esc / F11)' : 'Toggle Fullscreen (F11)'}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded transition cursor-pointer ${
-              isFullscreen ? 'bg-stone-900 text-stone-50 hover:bg-stone-800' : 'hover:bg-stone-100 text-stone-600'
+            className={`flex-1 min-h-[38px] md:min-h-[32px] flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition cursor-pointer ${
+              isFullscreen
+                ? 'bg-teal-700 text-white hover:bg-teal-800'
+                : 'hover:bg-stone-100 text-stone-600'
             }`}
           >
             {isFullscreen ? (
-              <Minimize2 size={12} className={isFullscreen ? 'text-stone-300' : 'text-stone-500'} />
+              <Minimize2 size={13} className="text-teal-100" />
             ) : (
-              <Maximize2 size={12} className="text-stone-500" />
+              <Maximize2 size={13} className="text-stone-500" />
             )}
             {(!collapsed || isMobileMenuOpen) && (
               <span className="truncate">{isFullscreen ? 'Exit Full' : 'Fullscreen'}</span>

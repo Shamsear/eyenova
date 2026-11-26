@@ -1,9 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Loader2, AlertCircle, ChevronDown, ChevronRight, CheckSquare, Square, Package } from 'lucide-react';
+import {
+  Check,
+  Loader2,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  CheckSquare,
+  Square,
+  Package,
+  Truck,
+} from 'lucide-react';
 import { formatQar, formatQatarDateTime } from '@/lib/utils';
+import { ResponsiveDialog } from '@/components/ui/responsive-dialog';
 
 interface InvoiceProductItem {
   id: string;
@@ -50,6 +60,38 @@ const PLATFORMS = [
   { id: 'RAFEEQ', label: 'Rafeeq', color: 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50', active: 'bg-rose-800 text-white border-rose-800 shadow-xs' },
 ];
 
+function buildInitialPlatformData(platformBills: InvoiceItem[], platform: string) {
+  const allIds = new Set(platformBills.map((b) => b.id));
+  const newStates: Record<string, BillAmountState> = {};
+  let totalGross = 0;
+
+  for (const b of platformBills) {
+    totalGross += b.totalQar;
+    const itemAmounts: Record<string, { netReceived: number; commission: number; commissionPercent: number }> = {};
+    if (b.items && b.items.length > 0) {
+      for (const it of b.items) {
+        itemAmounts[it.id] = { netReceived: it.total, commission: 0, commissionPercent: 0 };
+      }
+    }
+    newStates[b.id] = {
+      netReceived: b.totalQar,
+      commission: 0,
+      commissionPercent: 0,
+      isExpanded: false,
+      itemAmounts,
+    };
+  }
+
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Qatar' });
+  return {
+    allIds,
+    newStates,
+    netReceivedTotal: totalGross.toFixed(2),
+    todayStr,
+    statementRef: `${platform}-PAYOUT-${todayStr.replace(/-/g, '')}`,
+  };
+}
+
 export function AggregatorSettlementModal({
   isOpen,
   onClose,
@@ -57,19 +99,9 @@ export function AggregatorSettlementModal({
   onSettlementSuccess,
 }: AggregatorSettlementModalProps) {
   const [platform, setPlatform] = useState<'SNOONU' | 'TALABAT' | 'RAFEEQ'>('SNOONU');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [billStates, setBillStates] = useState<Record<string, BillAmountState>>({});
-  const [netReceivedTotal, setNetReceivedTotal] = useState<string>('');
-  const [commissionTotal, setCommissionTotal] = useState<string>('0.00');
-  const [commissionPercentTotal, setCommissionPercentTotal] = useState<string>('0.00');
-  const [statementRef, setStatementRef] = useState<string>('');
-  const [settledDate, setSettledDate] = useState<string>(() =>
-    new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Qatar' })
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
   const [fetchedInvoices, setFetchedInvoices] = useState<InvoiceItem[] | null>(null);
+  const [fetchRevision, setFetchRevision] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -79,6 +111,7 @@ export function AggregatorSettlementModal({
       .then((data) => {
         if (isMounted && data && Array.isArray(data.invoices)) {
           setFetchedInvoices(data.invoices);
+          setFetchRevision((r) => r + 1);
         }
       })
       .catch((err) => console.error('Error fetching pending settlement invoices:', err));
@@ -89,48 +122,66 @@ export function AggregatorSettlementModal({
 
   const activeInvoices = fetchedInvoices || invoices;
 
-  // Pending settlement bills for active platform
+  return (
+    <ResponsiveDialog
+      open={isOpen}
+      onClose={onClose}
+      disableDismiss={isSubmitting}
+      maxWidthClass="sm:max-w-3xl"
+      icon={<Truck size={16} className="text-teal-700" />}
+      title="Aggregator Payout Settlement & Reconciliation"
+      subtitle="Select bills from payout statement and track received amounts per bill and product item"
+      bodyClassName="p-0 flex flex-col flex-1 min-h-0 overflow-hidden"
+    >
+      {isOpen && (
+        <AggregatorSettlementInner
+          key={`${platform}-${fetchRevision}`}
+          platform={platform}
+          onPlatformChange={setPlatform}
+          activeInvoices={activeInvoices}
+          onClose={onClose}
+          onSettlementSuccess={onSettlementSuccess}
+          isSubmitting={isSubmitting}
+          setIsSubmitting={setIsSubmitting}
+        />
+      )}
+    </ResponsiveDialog>
+  );
+}
+
+interface AggregatorSettlementInnerProps {
+  platform: 'SNOONU' | 'TALABAT' | 'RAFEEQ';
+  onPlatformChange: (p: 'SNOONU' | 'TALABAT' | 'RAFEEQ') => void;
+  activeInvoices: InvoiceItem[];
+  onClose: () => void;
+  onSettlementSuccess: () => void;
+  isSubmitting: boolean;
+  setIsSubmitting: (v: boolean) => void;
+}
+
+function AggregatorSettlementInner({
+  platform,
+  onPlatformChange,
+  activeInvoices,
+  onClose,
+  onSettlementSuccess,
+  isSubmitting,
+  setIsSubmitting,
+}: AggregatorSettlementInnerProps) {
   const platformBills = activeInvoices.filter(
     (inv) => inv.status === 'PENDING_SETTLEMENT' && inv.channel?.toUpperCase() === platform
   );
 
-  // Initialize or reset bill amounts when platform or modal changes
-  useEffect(() => {
-    if (isOpen) {
-      const allIds = new Set(platformBills.map((b) => b.id));
-      setSelectedIds(allIds);
-
-      const newStates: Record<string, BillAmountState> = {};
-      let totalGross = 0;
-
-      for (const b of platformBills) {
-        totalGross += b.totalQar;
-        const itemAmounts: Record<string, { netReceived: number; commission: number; commissionPercent: number }> = {};
-        if (b.items && b.items.length > 0) {
-          for (const it of b.items) {
-            itemAmounts[it.id] = { netReceived: it.total, commission: 0, commissionPercent: 0 };
-          }
-        }
-        newStates[b.id] = {
-          netReceived: b.totalQar,
-          commission: 0,
-          commissionPercent: 0,
-          isExpanded: false,
-          itemAmounts,
-        };
-      }
-
-      setBillStates(newStates);
-      setNetReceivedTotal(totalGross.toFixed(2));
-      setCommissionTotal('0.00');
-      setCommissionPercentTotal('0.00');
-      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Qatar' });
-      setSettledDate(todayStr);
-      setStatementRef(`${platform}-PAYOUT-${todayStr.replace(/-/g, '')}`);
-      setErrorMessage('');
-      setSuccessMessage('');
-    }
-  }, [isOpen, platform, platformBills.length]);
+  const [initialData] = useState(() => buildInitialPlatformData(platformBills, platform));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => initialData.allIds);
+  const [billStates, setBillStates] = useState<Record<string, BillAmountState>>(() => initialData.newStates);
+  const [netReceivedTotal, setNetReceivedTotal] = useState<string>(() => initialData.netReceivedTotal);
+  const [commissionTotal, setCommissionTotal] = useState<string>('0.00');
+  const [commissionPercentTotal, setCommissionPercentTotal] = useState<string>('0.00');
+  const [statementRef, setStatementRef] = useState<string>(() => initialData.statementRef);
+  const [settledDate, setSettledDate] = useState<string>(() => initialData.todayStr);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const selectedBills = platformBills.filter((b) => selectedIds.has(b.id));
   const grossTotal = selectedBills.reduce((sum, b) => sum + b.totalQar, 0);
@@ -631,437 +682,407 @@ export function AggregatorSettlementModal({
       setTimeout(() => {
         onClose();
       }, 1200);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error occurred during settlement.');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error occurred during settlement.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          className="bg-white rounded-xl border border-stone-200 shadow-xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 bg-stone-50/50 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xl">
-                🛵
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-stone-900">Aggregator Payout Settlement &amp; Reconciliation</h3>
-                <p className="text-[11px] text-stone-500">
-                  Select bills from payout statement and track received amounts per bill and product item
-                </p>
-              </div>
-            </div>
+    <form
+      onSubmit={handleSubmit}
+      className="flex-1 min-h-0 flex flex-col overflow-hidden"
+    >
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+        {/* Platform Selection Tabs */}
+        <div>
+          <label className="text-xs font-semibold text-stone-700 mb-1.5 block">
+            Select Delivery Platform
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {PLATFORMS.map((p) => {
+              const isSelected = platform === p.id;
+              const count = activeInvoices.filter(
+                (i) => i.status === 'PENDING_SETTLEMENT' && i.channel?.toUpperCase() === p.id
+              ).length;
+
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onPlatformChange(p.id as 'SNOONU' | 'TALABAT' | 'RAFEEQ')}
+                  className={`min-h-[40px] py-2 px-3 rounded-lg border text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                    isSelected ? p.active : p.color
+                  }`}
+                >
+                  <span>{p.label}</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                      isSelected ? 'bg-black/20 text-white' : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selection Bar & Pending Bills Summary */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+          <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="p-1 text-stone-400 hover:text-stone-700 rounded-lg hover:bg-stone-100 transition cursor-pointer"
+              type="button"
+              onClick={handleToggleAll}
+              className="inline-flex items-center gap-1.5 text-stone-600 hover:text-stone-900 font-semibold cursor-pointer min-h-[32px]"
             >
-              <X size={18} />
+              {selectedIds.size > 0 && selectedIds.size === platformBills.length ? (
+                <CheckSquare size={15} className="text-teal-700" />
+              ) : (
+                <Square size={15} />
+              )}
+              <span>{selectedIds.size === platformBills.length ? 'Deselect All' : 'Select All'}</span>
             </button>
+            <span className="text-stone-300">|</span>
+            <button
+              type="button"
+              onClick={handleToggleExpandAll}
+              className="text-stone-600 hover:text-stone-900 font-semibold cursor-pointer min-h-[32px]"
+            >
+              Expand/Collapse Products
+            </button>
+            <span className="text-stone-300">|</span>
+            <span className="text-stone-500 font-medium">
+              {selectedIds.size} of {platformBills.length} bills selected
+            </span>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="p-5 space-y-4 flex-1 overflow-y-auto">
-              {/* Platform Selection Tabs */}
-              <div>
-                <label className="text-xs font-semibold text-stone-700 mb-1.5 block">
-                  Select Delivery Platform:
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {PLATFORMS.map((p) => {
-                    const isSelected = platform === p.id;
-                    const count = activeInvoices.filter(
-                      (i) => i.status === 'PENDING_SETTLEMENT' && i.channel?.toUpperCase() === p.id
-                    ).length;
+          <div className="font-mono text-stone-900 font-bold bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 tabular-nums">
+            Gross: {formatQar(grossTotal)}
+          </div>
+        </div>
 
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setPlatform(p.id as any)}
-                        className={`py-2 px-3 rounded-lg border text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
-                          isSelected ? p.active : p.color
-                        }`}
-                      >
-                        <span>{p.label}</span>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
-                            isSelected ? 'bg-black/20 text-white' : 'bg-stone-100 text-stone-600'
-                          }`}
+        {/* Pending Bills Table with Itemized Product Breakdown */}
+        <div className="border border-stone-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+          {platformBills.length === 0 ? (
+            <div className="py-8 text-center text-stone-400 text-xs">
+              No pending bills for {platform}. All orders are settled.
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-100 text-[11px]">
+              {platformBills.map((b) => {
+                const isChecked = selectedIds.has(b.id);
+                const bState = billStates[b.id] || {
+                  netReceived: b.totalQar,
+                  commission: 0,
+                  commissionPercent: 0,
+                  isExpanded: false,
+                  itemAmounts: {},
+                };
+
+                return (
+                  <div key={b.id} className={`transition ${isChecked ? 'bg-stone-50/70' : 'bg-white opacity-70'}`}>
+                    {/* Main Bill Header Row */}
+                    <div className="p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleRow(b.id)}
+                          className="w-4 h-4 rounded text-teal-700 focus:ring-teal-600 cursor-pointer shrink-0"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpandBill(b.id)}
+                          className="w-7 h-7 flex items-center justify-center hover:bg-stone-200/60 rounded text-stone-500 transition cursor-pointer shrink-0"
+                          title="Toggle product items"
                         >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                          {bState.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
 
-              {/* Selection Bar & Pending Bills Summary */}
-              <div className="flex items-center justify-between text-xs pt-1">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleToggleAll}
-                    className="inline-flex items-center gap-1.5 text-stone-600 hover:text-stone-900 font-semibold cursor-pointer"
-                  >
-                    {selectedIds.size > 0 && selectedIds.size === platformBills.length ? (
-                      <CheckSquare size={15} className="text-stone-900" />
-                    ) : (
-                      <Square size={15} />
-                    )}
-                    <span>{selectedIds.size === platformBills.length ? 'Deselect All' : 'Select All'}</span>
-                  </button>
-                  <span className="text-stone-300">|</span>
-                  <button
-                    type="button"
-                    onClick={handleToggleExpandAll}
-                    className="text-stone-600 hover:text-stone-900 font-semibold cursor-pointer"
-                  >
-                    Expand/Collapse Products
-                  </button>
-                  <span className="text-stone-300">|</span>
-                  <span className="text-stone-500 font-medium">
-                    {selectedIds.size} of {platformBills.length} bills selected
-                  </span>
-                </div>
-
-                <div className="font-mono text-stone-900 font-bold bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
-                  Gross: {formatQar(grossTotal)}
-                </div>
-              </div>
-
-              {/* Pending Bills Table with Itemized Product Breakdown */}
-              <div className="border border-stone-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-                {platformBills.length === 0 ? (
-                  <div className="py-8 text-center text-stone-400 text-xs">
-                    No pending bills for {platform}. All orders are settled.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-stone-100 text-[11px]">
-                    {platformBills.map((b) => {
-                      const isChecked = selectedIds.has(b.id);
-                      const bState = billStates[b.id] || {
-                        netReceived: b.totalQar,
-                        commission: 0,
-                        isExpanded: false,
-                        itemAmounts: {},
-                      };
-
-                      return (
-                        <div key={b.id} className={`transition ${isChecked ? 'bg-stone-50/70' : 'bg-white opacity-70'}`}>
-                          {/* Main Bill Header Row */}
-                          <div className="p-2.5 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => handleToggleRow(b.id)}
-                                className="rounded text-amber-600 focus:ring-amber-500 cursor-pointer shrink-0"
-                              />
-
-                              <button
-                                type="button"
-                                onClick={() => handleToggleExpandBill(b.id)}
-                                className="p-1 hover:bg-stone-200/60 rounded text-stone-500 transition cursor-pointer shrink-0"
-                                title="Toggle product items"
-                              >
-                                {bState.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                              </button>
-
-                              <div className="min-w-0">
-                                <span className="font-mono font-bold text-stone-900 block truncate">
-                                  {b.invoiceNumber}
-                                </span>
-                                <span className="text-[10px] text-stone-500 block truncate">
-                                  {formatQatarDateTime(b.createdAt)} • {b.customerName}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 shrink-0">
-                              <div className="text-right">
-                                <span className="text-[9px] text-stone-500 block">Gross</span>
-                                <span className="font-mono font-bold text-stone-900 text-xs">
-                                  {formatQar(b.totalQar)}
-                                </span>
-                              </div>
-
-                              <div className="text-right">
-                                <label className="text-[9px] text-emerald-800 font-semibold block">Net Received</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={bState.netReceived}
-                                  onChange={(e) => handleBillNetReceivedChange(b.id, e.target.value)}
-                                  className="w-20 h-7 px-1.5 text-xs font-mono font-bold text-emerald-700 bg-white border border-emerald-300 rounded text-right focus:border-emerald-600 focus:outline-hidden"
-                                />
-                              </div>
-
-                              <div className="text-right">
-                                <label className="text-[9px] text-rose-700 font-semibold block">Comm %</label>
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  value={bState.commissionPercent || 0}
-                                  onChange={(e) => handleBillCommissionPercentChange(b.id, e.target.value)}
-                                  className="w-14 h-7 px-1 text-xs font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
-                                />
-                              </div>
-
-                              <div className="text-right">
-                                <label className="text-[9px] text-rose-700 font-semibold block">Comm (QAR)</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={bState.commission}
-                                  onChange={(e) => handleBillCommissionChange(b.id, e.target.value)}
-                                  className="w-20 h-7 px-1.5 text-xs font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
-                                />
-                              </div></div>
-                          </div>
-
-                          {/* Expanded Items Breakdown */}
-                          {bState.isExpanded && b.items && b.items.length > 0 && (
-                            <div className="bg-stone-100/70 border-t border-stone-200/80 px-4 py-2 space-y-1.5">
-                              <div className="text-[10px] font-bold text-stone-700 flex items-center gap-1">
-                                <Package size={11} className="text-stone-500" />
-                                <span>Product Line Items (Edit item received amount if listed on statement):</span>
-                              </div>
-                              <div className="space-y-1">
-                                {b.items.map((it) => {
-                                  const itState = bState.itemAmounts?.[it.id] || {
-                                    netReceived: it.total,
-                                    commission: 0,
-                                  };
-
-                                  return (
-                                    <div
-                                      key={it.id}
-                                      className="flex items-center justify-between gap-2 py-1 px-2 rounded bg-white border border-stone-200 text-[10px]"
-                                    >
-                                      <div className="min-w-0 flex-1 truncate">
-                                        <span className="font-medium text-stone-900">{it.name}</span>
-                                        <span className="text-stone-500 ml-1.5">x{it.quantity}</span>
-                                      </div>
-
-                                      <div className="flex items-center gap-3 shrink-0">
-                                        <div className="text-right">
-                                          <span className="text-stone-500 font-mono">{formatQar(it.total)}</span>
-                                        </div>
-
-                                        <div className="text-right">
-                                          <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            title="Net received for this product"
-                                            value={itState.netReceived}
-                                            onChange={(e) => handleItemNetReceivedChange(b.id, it.id, e.target.value)}
-                                            className="w-16 h-6 px-1 text-[11px] font-mono font-bold text-emerald-700 bg-white border border-emerald-300 rounded text-right focus:border-emerald-600 focus:outline-hidden"
-                                          />
-                                        </div>
-
-                                        <div className="text-right">
-                                          <input
-                                            type="number"
-                                            step="0.1"
-                                            min="0"
-                                            title="Commission % for this product"
-                                            value={itState.commissionPercent || 0}
-                                            onChange={(e) => handleItemCommissionPercentChange(b.id, it.id, e.target.value)}
-                                            className="w-12 h-6 px-1 text-[11px] font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
-                                          />
-                                        </div>
-
-                                        <div className="text-right">
-                                          <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            title="Commission amount in QAR for this product"
-                                            value={itState.commission}
-                                            onChange={(e) => handleItemCommissionChange(b.id, it.id, e.target.value)}
-                                            className="w-16 h-6 px-1 text-[11px] font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
+                        <div className="min-w-0">
+                          <span className="font-mono font-bold text-stone-900 block truncate">
+                            {b.invoiceNumber}
+                          </span>
+                          <span className="text-[10px] text-stone-500 block truncate">
+                            {formatQatarDateTime(b.createdAt)} • {b.customerName}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      </div>
 
-              {/* Payout & Commission Total Summary Form */}
-              <div className="bg-stone-50 p-3.5 rounded-lg border border-stone-200 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                      Total Net Bank Deposit (QAR)* / صافي المحول للبنك:
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={netReceivedTotal}
-                      onChange={(e) => handleNetReceivedTotalChange(e.target.value)}
-                      required
-                      placeholder="0.00"
-                      className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden text-emerald-700"
-                    />
-                    <span className="text-[10px] text-stone-500 block mt-0.5">
-                      Sum of all bill received amounts (or enters proportional distribution)
-                    </span>
-                  </div>
+                      <div className="grid grid-cols-4 sm:flex items-center gap-2 sm:gap-3 shrink-0">
+                        <div className="text-right">
+                          <span className="text-[9px] text-stone-500 block">Gross</span>
+                          <span className="font-mono font-bold text-stone-900 text-xs tabular-nums">
+                            {formatQar(b.totalQar)}
+                          </span>
+                        </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-bold text-stone-800">
-                        Platform Commission (% / QAR) / إجمالي العمولات:
-                      </label>
-                      <div className="flex items-center gap-1">
-                        {[15, 18, 20, 22, 25].map((pct) => (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => handleCommissionPercentTotalChange(pct.toString())}
-                            className="px-1.5 py-0.5 text-[9px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded border border-rose-200 cursor-pointer"
-                          >
-                            {pct}%
-                          </button>
-                        ))}
+                        <div className="text-right">
+                          <label className="text-[9px] text-emerald-800 font-semibold block">Net Recv</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={bState.netReceived}
+                            onChange={(e) => handleBillNetReceivedChange(b.id, e.target.value)}
+                            className="w-full sm:w-20 min-h-[34px] sm:min-h-0 sm:h-7 px-1.5 text-[15px] sm:text-xs font-mono font-bold text-emerald-700 bg-white border border-emerald-300 rounded text-right focus:border-teal-600 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="text-right">
+                          <label className="text-[9px] text-rose-700 font-semibold block">Comm %</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={bState.commissionPercent || 0}
+                            onChange={(e) => handleBillCommissionPercentChange(b.id, e.target.value)}
+                            className="w-full sm:w-14 min-h-[34px] sm:min-h-0 sm:h-7 px-1 text-[15px] sm:text-xs font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="text-right">
+                          <label className="text-[9px] text-rose-700 font-semibold block">Comm QAR</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={bState.commission}
+                            onChange={(e) => handleBillCommissionChange(b.id, e.target.value)}
+                            className="w-full sm:w-20 min-h-[34px] sm:min-h-0 sm:h-7 px-1.5 text-[15px] sm:text-xs font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={commissionPercentTotal}
-                          onChange={(e) => handleCommissionPercentTotalChange(e.target.value)}
-                          placeholder="Rate %"
-                          className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-rose-300 rounded-md focus:border-rose-600 focus:outline-hidden text-rose-700"
-                        />
-                        <span className="text-[9px] text-stone-500 block mt-0.5">Rate (%)</span>
-                      </div>
-                      <div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={commissionTotal}
-                          onChange={(e) => handleCommissionTotalChange(e.target.value)}
-                          placeholder="Amount QAR"
-                          className="w-full h-9 px-3 text-sm font-mono font-bold bg-white border border-rose-300 rounded-md focus:border-rose-600 focus:outline-hidden text-rose-700"
-                        />
-                        <span className="text-[9px] text-stone-500 block mt-0.5">Amount (QAR)</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                      Statement Ref / Bank Reference # / رقم كشف الحساب:
-                    </label>
-                    <input
-                      type="text"
-                      value={statementRef}
-                      onChange={(e) => setStatementRef(e.target.value)}
-                      placeholder="e.g. SNOONU-OCT-WEEK4"
-                      className="w-full h-8 px-3 text-xs font-mono bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
-                    />
+                    {/* Expanded Items Breakdown */}
+                    {bState.isExpanded && b.items && b.items.length > 0 && (
+                      <div className="bg-stone-100/70 border-t border-stone-200/80 px-3 sm:px-4 py-2 space-y-1.5">
+                        <div className="text-[10px] font-bold text-stone-700 flex items-center gap-1">
+                          <Package size={11} className="text-stone-500" />
+                          <span>Product Line Items (Edit item received amount if listed on statement):</span>
+                        </div>
+                        <div className="space-y-1">
+                          {b.items.map((it) => {
+                            const itState = bState.itemAmounts?.[it.id] || {
+                              netReceived: it.total,
+                              commission: 0,
+                              commissionPercent: 0,
+                            };
+
+                            return (
+                              <div
+                                key={it.id}
+                                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-1.5 px-2 rounded bg-white border border-stone-200 text-[10px]"
+                              >
+                                <div className="min-w-0 flex-1 truncate">
+                                  <span className="font-medium text-stone-900">{it.name}</span>
+                                  <span className="text-stone-500 ml-1.5">x{it.quantity}</span>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+                                  <div className="text-right">
+                                    <span className="text-stone-500 font-mono tabular-nums">{formatQar(it.total)}</span>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      title="Net received for this product"
+                                      value={itState.netReceived}
+                                      onChange={(e) => handleItemNetReceivedChange(b.id, it.id, e.target.value)}
+                                      className="w-16 h-7 sm:h-6 px-1 text-[11px] font-mono font-bold text-emerald-700 bg-white border border-emerald-300 rounded text-right focus:border-teal-600 focus:outline-hidden"
+                                    />
+                                  </div>
+
+                                  <div className="text-right">
+                                    <input
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      title="Commission % for this product"
+                                      value={itState.commissionPercent || 0}
+                                      onChange={(e) => handleItemCommissionPercentChange(b.id, it.id, e.target.value)}
+                                      className="w-12 h-7 sm:h-6 px-1 text-[11px] font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
+                                    />
+                                  </div>
+
+                                  <div className="text-right">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      title="Commission amount in QAR for this product"
+                                      value={itState.commission}
+                                      onChange={(e) => handleItemCommissionChange(b.id, it.id, e.target.value)}
+                                      className="w-16 h-7 sm:h-6 px-1 text-[11px] font-mono font-bold text-rose-700 bg-white border border-rose-300 rounded text-right focus:border-rose-600 focus:outline-hidden"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-stone-800 block mb-1">
-                      Payout / Commission Date*:
-                    </label>
-                    <input
-                      type="date"
-                      value={settledDate}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSettledDate(val);
-                        if (/^(SNOONU|TALABAT|RAFEEQ)-PAYOUT-\d{8}$/.test(statementRef)) {
-                          setStatementRef(`${platform}-PAYOUT-${val.replace(/-/g, '')}`);
-                        }
-                      }}
-                      className="w-full h-8 px-2.5 text-xs font-mono bg-white border border-stone-300 rounded-md focus:border-stone-900 focus:outline-hidden"
-                    />
-                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Payout & Commission Total Summary Form */}
+        <div className="bg-stone-50 p-3.5 rounded-lg border border-stone-200 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-stone-800 block mb-1">
+                Total Net Bank Deposit (QAR)* / صافي المحول للبنك
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={netReceivedTotal}
+                onChange={(e) => handleNetReceivedTotalChange(e.target.value)}
+                required
+                placeholder="0.00"
+                className="w-full min-h-[40px] sm:h-9 px-3 text-[16px] sm:text-sm font-mono font-bold bg-white border border-stone-300 rounded-lg focus:border-teal-600 focus:outline-hidden text-emerald-700"
+              />
+              <span className="text-[10px] text-stone-500 block mt-0.5">
+                Sum of all bill received amounts (or enters proportional distribution)
+              </span>
+            </div>
+
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
+                <label className="text-[11px] font-bold text-stone-800">
+                  Platform Commission (% / QAR)
+                </label>
+                <div className="flex items-center gap-1">
+                  {[15, 18, 20, 22, 25].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => handleCommissionPercentTotalChange(pct.toString())}
+                      className="px-1.5 py-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded border border-rose-200 cursor-pointer"
+                    >
+                      {pct}%
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              {/* Error and Success alerts */}
-              {errorMessage && (
-                <div className="flex items-center gap-2 p-2.5 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-800">
-                  <AlertCircle size={15} className="shrink-0" />
-                  <span>{errorMessage}</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={commissionPercentTotal}
+                    onChange={(e) => handleCommissionPercentTotalChange(e.target.value)}
+                    placeholder="Rate %"
+                    className="w-full min-h-[40px] sm:h-9 px-3 text-[16px] sm:text-sm font-mono font-bold bg-white border border-rose-300 rounded-lg focus:border-rose-600 focus:outline-hidden text-rose-700"
+                  />
+                  <span className="text-[9px] text-stone-500 block mt-0.5">Rate (%)</span>
                 </div>
-              )}
-
-              {successMessage && (
-                <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800 font-semibold">
-                  <Check size={15} className="shrink-0" />
-                  <span>{successMessage}</span>
+                <div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={commissionTotal}
+                    onChange={(e) => handleCommissionTotalChange(e.target.value)}
+                    placeholder="Amount QAR"
+                    className="w-full min-h-[40px] sm:h-9 px-3 text-[16px] sm:text-sm font-mono font-bold bg-white border border-rose-300 rounded-lg focus:border-rose-600 focus:outline-hidden text-rose-700"
+                  />
+                  <span className="text-[9px] text-stone-500 block mt-0.5">Amount (QAR)</span>
                 </div>
-              )}
+              </div>
             </div>
+          </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-3 border-t border-stone-200 bg-stone-50/50 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-200/60 rounded-md transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || selectedIds.size === 0}
-                className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-stone-900 hover:bg-stone-800 disabled:bg-stone-300 rounded-md transition shadow-xs cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin" />
-                    <span>Processing Settlement...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check size={14} />
-                    <span>Reconcile &amp; Settle ({selectedIds.size}) Bills</span>
-                  </>
-                )}
-              </button>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="text-[11px] font-bold text-stone-800 block mb-1">
+                Statement Ref / Bank Reference # / رقم كشف الحساب
+              </label>
+              <input
+                type="text"
+                value={statementRef}
+                onChange={(e) => setStatementRef(e.target.value)}
+                placeholder="e.g. SNOONU-OCT-WEEK4"
+                className="w-full min-h-[40px] sm:h-8.5 px-3 text-[16px] sm:text-xs font-mono bg-white border border-stone-300 rounded-lg focus:border-teal-600 focus:outline-hidden"
+              />
             </div>
-          </form>
-        </motion.div>
+            <div>
+              <label className="text-[11px] font-bold text-stone-800 block mb-1">
+                Payout / Commission Date*
+              </label>
+              <input
+                type="date"
+                value={settledDate}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSettledDate(val);
+                  if (/^(SNOONU|TALABAT|RAFEEQ)-PAYOUT-\d{8}$/.test(statementRef)) {
+                    setStatementRef(`${platform}-PAYOUT-${val.replace(/-/g, '')}`);
+                  }
+                }}
+                className="w-full min-h-[40px] sm:h-8.5 px-2.5 text-[16px] sm:text-xs font-mono bg-white border border-stone-300 rounded-lg focus:border-teal-600 focus:outline-hidden"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Error and Success alerts */}
+        {errorMessage && (
+          <div className="flex items-center gap-2 p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-semibold">
+            <Check size={15} className="shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+        )}
       </div>
-    </AnimatePresence>
+
+      <div className="px-4 py-3 sm:px-5 bg-stone-50 border-t border-stone-200 flex items-center justify-between gap-2 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isSubmitting}
+          className="min-h-[44px] px-4 text-xs font-semibold text-stone-700 bg-white border border-stone-200 hover:bg-stone-100 rounded-lg transition cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={isSubmitting || selectedIds.size === 0}
+          className="min-h-[44px] inline-flex items-center gap-2 px-5 text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 disabled:bg-stone-300 rounded-lg transition shadow-xs cursor-pointer"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 size={13} className="animate-spin" />
+              <span>Processing Settlement...</span>
+            </>
+          ) : (
+            <>
+              <Check size={14} />
+              <span>Reconcile &amp; Settle ({selectedIds.size}) Bills</span>
+            </>
+          )}
+        </button>
+      </div>
+    </form>
   );
 }

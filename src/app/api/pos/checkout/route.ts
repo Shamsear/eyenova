@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
 
       changeDue,
 
+      splitCash,
+
+      splitCard,
+
       discountAmount,
 
       deliveryFee,
@@ -67,6 +71,10 @@ export async function POST(req: NextRequest) {
       cashTendered?: number;
 
       changeDue?: number;
+
+      splitCash?: number;
+
+      splitCard?: number;
 
       discountAmount: number;
 
@@ -261,6 +269,10 @@ export async function POST(req: NextRequest) {
     } else if (paymentMethod === 'CASH_ON_DELIVERY') {
 
       mappedPaymentMethod = 'CASH_ON_DELIVERY';
+
+    } else if (paymentMethod === 'SPLIT') {
+
+      mappedPaymentMethod = 'SPLIT';
 
     } else {
 
@@ -529,27 +541,51 @@ export async function POST(req: NextRequest) {
 
     if (shiftId && shiftId !== 'SHIFT-AUTO' && !isAggregator) {
 
-      const isCash = paymentMethod === 'CASH' || mappedPaymentMethod === 'IN_STORE_PAYMENT';
+      if (paymentMethod === 'SPLIT' || mappedPaymentMethod === 'SPLIT') {
 
-      const isCard = paymentMethod === 'CARD' || mappedPaymentMethod === 'CREDIT_CARD' || mappedPaymentMethod === 'DEBIT_CARD_QPAY';
+        const sCash = Number(splitCash ?? (cashTendered || 0));
 
-      const isOther = paymentMethod === 'STORE_CREDIT';
+        const sCard = Number(splitCard ?? Math.max(0, grandTotal - sCash));
 
-      await prisma.cashRegisterShift.update({
+        await prisma.cashRegisterShift.update({
 
-        where: { id: shiftId },
+          where: { id: shiftId },
 
-        data: {
+          data: {
 
-          ...(isCash ? { cashSales: { increment: grandTotal } } : {}),
+            cashSales: { increment: sCash },
 
-          ...(isCard ? { cardSales: { increment: grandTotal } } : {}),
+            cardSales: { increment: sCard },
 
-          ...(isOther ? { otherSales: { increment: grandTotal } } : {}),
+          },
 
-        },
+        });
 
-      });
+      } else {
+
+        const isCash = paymentMethod === 'CASH' || mappedPaymentMethod === 'IN_STORE_PAYMENT';
+
+        const isCard = paymentMethod === 'CARD' || mappedPaymentMethod === 'CREDIT_CARD' || mappedPaymentMethod === 'DEBIT_CARD_QPAY';
+
+        const isOther = paymentMethod === 'STORE_CREDIT';
+
+        await prisma.cashRegisterShift.update({
+
+          where: { id: shiftId },
+
+          data: {
+
+            ...(isCash ? { cashSales: { increment: grandTotal } } : {}),
+
+            ...(isCard ? { cardSales: { increment: grandTotal } } : {}),
+
+            ...(isOther ? { otherSales: { increment: grandTotal } } : {}),
+
+          },
+
+        });
+
+      }
 
     }
 
